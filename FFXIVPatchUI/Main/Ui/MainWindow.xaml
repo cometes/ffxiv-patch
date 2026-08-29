@@ -424,14 +424,18 @@
 
               <DockPanel>
                 <TextBlock Text="원문 유지" Foreground="{StaticResource TextDim}" FontSize="12"
-                           Width="112" VerticalAlignment="Center"/>
-                <StackPanel Orientation="Horizontal">
-                  <ToggleButton x:Name="ChipBnpc" Style="{StaticResource Chip}" Content="보스명"/>
-                  <ToggleButton x:Name="ChipAction" Style="{StaticResource Chip}" Content="기술명" Margin="6,0,0,0"/>
-                  <ToggleButton x:Name="ChipCommon" Style="{StaticResource Chip}" Content="상용구" Margin="6,0,0,0"/>
-                  <ToggleButton x:Name="ChipDuty" Style="{StaticResource Chip}" Content="임무명" Margin="6,0,0,0"/>
-                  <TextBlock Text="체크하면 해당 텍스트는 번역하지 않고 원문을 유지합니다" Foreground="{StaticResource TextFaint}"
-                             FontSize="11" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                           Width="112" VerticalAlignment="Top" Margin="0,6,0,0"/>
+                <StackPanel>
+                  <WrapPanel>
+                    <ToggleButton x:Name="ChipBnpc" Style="{StaticResource Chip}" Content="보스명"/>
+                    <ToggleButton x:Name="ChipAction" Style="{StaticResource Chip}" Content="기술명" Margin="6,0,0,0"/>
+                    <ToggleButton x:Name="ChipCommon" Style="{StaticResource Chip}" Content="상용구" Margin="6,0,0,0"/>
+                    <ToggleButton x:Name="ChipDuty" Style="{StaticResource Chip}" Content="임무명" Margin="6,0,0,0"/>
+                    <ToggleButton x:Name="ChipItem" Style="{StaticResource Chip}" Content="아이템명" Margin="6,0,0,0"/>
+                    <ToggleButton x:Name="ChipPlace" Style="{StaticResource Chip}" Content="지역명" Margin="6,0,0,0"/>
+                  </WrapPanel>
+                  <TextBlock Text="선택한 항목은 번역하지 않고 베이스 클라이언트 원문을 유지합니다"
+                             Foreground="{StaticResource TextFaint}" FontSize="11" Margin="0,6,0,0"/>
                 </StackPanel>
               </DockPanel>
             </StackPanel>

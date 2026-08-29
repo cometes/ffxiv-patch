@@ -193,6 +193,8 @@ UI 텍스처 패치는 `060000` UI 패키지를 대상으로 하며 새 `060000.
 --preserve-base-action-names   기술 이름을 베이스 클라이언트 언어로 유지
 --preserve-base-common-phrases 상용구를 베이스 클라이언트 언어로 유지
 --preserve-base-duty-names     ContentFinderCondition 임무명/짧은 임무명을 베이스 클라이언트 언어로 유지
+--preserve-base-item-names     Item 단수형/복수형/표시 이름을 베이스 클라이언트 언어로 유지
+--preserve-base-place-names    PlaceName 지역명 변형을 베이스 클라이언트 언어로 유지
 --preserve-base-language-groups <csv>
                                 위 원문 유지 그룹을 CSV로 지정
 --base-index <file>             clean 0a0000.win32.index 지정

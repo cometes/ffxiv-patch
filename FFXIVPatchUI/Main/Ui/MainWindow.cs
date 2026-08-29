@@ -81,6 +81,8 @@ namespace FFXIVKoreanPatch.Main
         private readonly ToggleButton chipAction;
         private readonly ToggleButton chipCommon;
         private readonly ToggleButton chipDuty;
+        private readonly ToggleButton chipItem;
+        private readonly ToggleButton chipPlace;
         private readonly Button fullPatchButton;
         private readonly Button fontPatchButton;
         private readonly Button removeButton;
@@ -161,6 +163,8 @@ namespace FFXIVKoreanPatch.Main
             chipAction = Find<ToggleButton>("ChipAction");
             chipCommon = Find<ToggleButton>("ChipCommon");
             chipDuty = Find<ToggleButton>("ChipDuty");
+            chipItem = Find<ToggleButton>("ChipItem");
+            chipPlace = Find<ToggleButton>("ChipPlace");
             fullPatchButton = Find<Button>("FullPatchButton");
             fontPatchButton = Find<Button>("FontPatchButton");
             removeButton = Find<Button>("RemoveButton");
@@ -308,6 +312,8 @@ namespace FFXIVKoreanPatch.Main
             chipAction.IsChecked = controller.PreserveBaseActionNames;
             chipCommon.IsChecked = controller.PreserveBaseCommonPhrases;
             chipDuty.IsChecked = controller.PreserveBaseDutyNames;
+            chipItem.IsChecked = controller.PreserveBaseItemNames;
+            chipPlace.IsChecked = controller.PreserveBasePlaceNames;
             suppressOptionEvents = false;
 
             globalBrowseButton.Click += (sender, args) => controller.BrowseGlobalPath();
@@ -330,7 +336,9 @@ namespace FFXIVKoreanPatch.Main
                         chipBnpc.IsChecked == true,
                         chipAction.IsChecked == true,
                         chipCommon.IsChecked == true,
-                        chipDuty.IsChecked == true);
+                        chipDuty.IsChecked == true,
+                        chipItem.IsChecked == true,
+                        chipPlace.IsChecked == true);
                 }
             };
             chipBnpc.Checked += chipHandler;
@@ -341,6 +349,10 @@ namespace FFXIVKoreanPatch.Main
             chipCommon.Unchecked += chipHandler;
             chipDuty.Checked += chipHandler;
             chipDuty.Unchecked += chipHandler;
+            chipItem.Checked += chipHandler;
+            chipItem.Unchecked += chipHandler;
+            chipPlace.Checked += chipHandler;
+            chipPlace.Unchecked += chipHandler;
 
             fullPatchButton.Click += (sender, args) => controller.RequestFullPatch();
             fontPatchButton.Click += (sender, args) => controller.RequestFontPatch();

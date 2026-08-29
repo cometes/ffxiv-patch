@@ -60,6 +60,18 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
         {
             NameColumnOffset
         };
+        private static readonly ushort[] BaseLanguageItemNameColumnOffsets = new ushort[]
+        {
+            0,
+            4,
+            12
+        };
+        private static readonly ushort[] BaseLanguagePlaceNameColumnOffsets = new ushort[]
+        {
+            0,
+            4,
+            8
+        };
         private static readonly ushort[] BaseLanguageCommonPhraseColumnOffsets = new ushort[]
         {
             0,
@@ -84,6 +96,10 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             "GeneralAction",
             "PetAction"
         };
+        private static readonly string[] BaseLanguageItemNameColumnSheets = new string[]
+        {
+            "Item"
+        };
         private static readonly string[] BaseLanguageCommonPhraseColumnSheets = new string[]
         {
             "Completion"
@@ -92,10 +108,16 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
         {
             "ContentFinderCondition"
         };
+        private static readonly string[] BaseLanguagePlaceNameColumnSheets = new string[]
+        {
+            "PlaceName"
+        };
         private const string BaseLanguageGroupBnpcName = "bnpcname";
         private const string BaseLanguageGroupActions = "actions";
         private const string BaseLanguageGroupCommonPhrases = "commonphrases";
         private const string BaseLanguageGroupDutyNames = "dutynames";
+        private const string BaseLanguageGroupItemNames = "itemnames";
+        private const string BaseLanguageGroupPlaceNames = "placenames";
 
         private readonly HashSet<string> _deleteFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, PatchSheetPolicy> _sheets = new Dictionary<string, PatchSheetPolicy>(StringComparer.OrdinalIgnoreCase);
@@ -173,6 +195,16 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             if (HasBaseLanguageGroup(preserveBaseLanguageGroups, BaseLanguageGroupDutyNames))
             {
                 ApplyBaseLanguageColumns(policy, BaseLanguageDutyNameColumnSheets, BaseLanguageDutyNameColumnOffsets);
+            }
+
+            if (HasBaseLanguageGroup(preserveBaseLanguageGroups, BaseLanguageGroupItemNames))
+            {
+                ApplyBaseLanguageColumns(policy, BaseLanguageItemNameColumnSheets, BaseLanguageItemNameColumnOffsets);
+            }
+
+            if (HasBaseLanguageGroup(preserveBaseLanguageGroups, BaseLanguageGroupPlaceNames))
+            {
+                ApplyBaseLanguageColumns(policy, BaseLanguagePlaceNameColumnSheets, BaseLanguagePlaceNameColumnOffsets);
             }
 
             // This Kefka line contains two Korean auto-translate phrases. Inline
@@ -340,6 +372,26 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 case "content-name":
                 case "content-names":
                     return BaseLanguageGroupDutyNames;
+
+                case "item":
+                case "items":
+                case "itemname":
+                case "itemnames":
+                case "item-name":
+                case "item-names":
+                    return BaseLanguageGroupItemNames;
+
+                case "place":
+                case "places":
+                case "placename":
+                case "placenames":
+                case "place-name":
+                case "place-names":
+                case "location":
+                case "locations":
+                case "location-name":
+                case "location-names":
+                    return BaseLanguageGroupPlaceNames;
 
                 default:
                     return null;
