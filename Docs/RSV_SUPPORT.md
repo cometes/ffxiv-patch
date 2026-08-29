@@ -9,7 +9,7 @@
 - Set `FFXIV_RSV_MAP_PATH` before running `Scripts\build-release.ps1` or `Scripts\build-test.ps1` to embed a local RSV map instead of downloading the default URL.
 - RSV replacement runs after a final EXD string is selected from the Korean source row and before the row is serialized.
 - Rows or columns intentionally preserved in the base/global language are not RSV-replaced. Those keep the base client RSV token so the base client/server path can resolve it normally.
-- `InstanceContentTextData#45500` is preserved from the selected global language. The battle-dialogue renderer did not evaluate synthesized `MacroCode.Fixed` payloads, while U+E040/U+E041 text only imitated the visible brackets. Keeping the original RSV token lets the client resolve and render the two phrases through its native auto-translate path. Other `InstanceContentTextData` RSV rows remain translated.
+- `InstanceContentTextData#45500` is the exception: it keeps the Korean source row's `_rsv_45500_-1_6_...` token unresolved. The battle-dialogue renderer did not evaluate synthesized `MacroCode.Fixed` payloads, while U+E040/U+E041 text only imitated the visible brackets. Keeping the Korean RSV token lets the client render the Korean phrases through the native auto-translate path. Other `InstanceContentTextData` RSV rows are resolved to Korean text from `rsv.json`.
 
 ## Language IDs
 
@@ -35,10 +35,10 @@ This is why a Korean source token such as `_rsv_..._-1_6_...` must not be interp
 
 Use `patch-diagnostics.tsv` for sheet-level checks and diagnostic CSV notes such as `rsv-resolved=1` or `rsv-unresolved=1`.
 
-2026-08-13 native auto-translate correction:
+2026-08-29 Korean native auto-translate correction:
 
-- Direct U+E040/U+E041 text and synthesized `MacroCode.Fixed` payloads were both rejected by live testing because neither reproduced the native battle-dialogue auto-translate presentation.
-- The verifier now requires `InstanceContentTextData#45500` to contain exactly the selected global language's original `_rsv_45500` token. Literal Hangul, PUA glyphs, color macros, and `Fixed` payloads therefore cannot pass this check.
+- Direct U+E040/U+E041 text and synthesized `MacroCode.Fixed` payloads were both rejected by live testing because neither reproduced the native battle-dialogue auto-translate presentation. Preserving the selected global language's RSV token was also rejected because it produced the Japanese or English phrase instead of the requested Korean phrase.
+- The verifier now requires `InstanceContentTextData#45500` to contain exactly the Korean source `_rsv_45500_-1_6_0_0_S13095D61_E13095D61` token for every target client language. Literal Hangul, global-language RSV tokens, PUA glyphs, color macros, and `Fixed` payloads cannot pass this check.
 
 ## Follow-up
 

@@ -529,7 +529,11 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                     }
                 }
 
-                if (allowRsvResolution && patchPolicy != null && patchPolicy.RsvResolver != null && patchPolicy.RsvResolver.IsEnabled)
+                if (allowRsvResolution &&
+                    !sheetPolicy.ShouldPreserveSourceRsvRow(targetRow.RowId) &&
+                    patchPolicy != null &&
+                    patchPolicy.RsvResolver != null &&
+                    patchPolicy.RsvResolver.IsEnabled)
                 {
                     RsvResolutionResult rsvResolution = patchPolicy.RsvResolver.Resolve(selected);
                     if (rsvResolution.Changed)

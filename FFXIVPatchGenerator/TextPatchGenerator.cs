@@ -1207,7 +1207,8 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                         if (rsvResolver != null &&
                             rsvResolver.IsEnabled &&
                             string.Equals(action, "replace", StringComparison.Ordinal) &&
-                            !sheetPolicy.ShouldUseGlobalFallbackRow(targetRow.RowId))
+                            !sheetPolicy.ShouldUseGlobalFallbackRow(targetRow.RowId) &&
+                            !sheetPolicy.ShouldPreserveSourceRsvRow(targetRow.RowId))
                         {
                             RsvResolutionResult rsvResolution = rsvResolver.Resolve(selectedBytes);
                             if (rsvResolution.Changed)
