@@ -508,6 +508,9 @@ namespace FFXIVKoreanPatch.Main
                 chipBnpc.IsEnabled = state.ControlsEnabled;
                 chipAction.IsEnabled = state.ControlsEnabled;
                 chipCommon.IsEnabled = state.ControlsEnabled;
+                chipDuty.IsEnabled = state.ControlsEnabled;
+                chipItem.IsEnabled = state.ControlsEnabled;
+                chipPlace.IsEnabled = state.ControlsEnabled;
                 restoreBackupButton.IsEnabled = state.ControlsEnabled;
                 openReleaseButton.IsEnabled = state.ControlsEnabled;
                 openLogsButton.IsEnabled = state.ControlsEnabled;
