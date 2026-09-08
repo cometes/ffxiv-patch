@@ -4,7 +4,7 @@
 
 ## 프로젝트 목적
 
-이 프로젝트는 한국 서버 클라이언트의 한글 텍스트, 폰트, UI 리소스를 이용해 글로벌 서버 클라이언트의 일본어/영어 슬롯에 적용할 한글 패치 release 파일을 로컬에서 생성하고, WinForms UI에서 설치/제거/복구까지 제어하는 도구입니다.
+이 프로젝트는 한국 서버 클라이언트의 한글 텍스트, 폰트, UI 리소스를 이용해 글로벌 서버 클라이언트의 일본어/영어 슬롯에 적용할 한글 패치 release 파일을 로컬에서 생성하고, WPF UI에서 설치/제거/복구까지 제어하는 도구입니다.
 
 기존 원격 release 다운로드형 패처 UI를 기반으로 하되, 현재 구조는 다음 흐름을 목표로 합니다.
 
@@ -18,7 +18,7 @@
 
 ### `FFXIVPatchUI`
 
-사용자가 실행하는 WinForms 패처입니다.
+사용자가 실행하는 WPF 패처입니다.
 
 - 글로벌/한국 서버 클라이언트 경로 자동 탐색
 - 경로 수동 지정
@@ -148,5 +148,4 @@ UI에서 내부 실행되는 콘솔형 release 생성기입니다.
 
 - [FEATURES.md](FEATURES.md): 구현 기능 전수 조사
 - [KNOWN_ISSUES.md](KNOWN_ISSUES.md): 현재 안 되는 내용과 작업 예정 항목
-- [SESSION_HANDOFF_CONSTRAINTS.md](SESSION_HANDOFF_CONSTRAINTS.md): 다음 세션 인수인계용 제약 사항
 - [RELEASE.md](RELEASE.md): 릴리즈 빌드/배포 관련 메모

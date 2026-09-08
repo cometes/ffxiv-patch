@@ -65,14 +65,14 @@
     <!-- global client row -->
     <text x="40" y="212" font-size="12" fill="#9AA3B2">글로벌 클라이언트</text>
     <rect x="156" y="196" width="520" height="24" rx="7" fill="#1A1F2B" stroke="#1E2430"/>
-    <text x="166" y="212" font-size="11.5" fill="#E8E6E1" font-family="'Cascadia Code','Consolas',monospace">D:\SquareEnix\FINAL FANTASY XIV - A Realm Reborn\game</text>
+    <text x="166" y="212" font-size="11.5" fill="#E8E6E1" font-family="'Cascadia Code','Consolas',monospace">D:\Games\FFXIV\game</text>
     <rect x="684" y="196" width="56" height="24" rx="7" fill="#1A1F2B" stroke="#262C3A"/>
     <text x="712" y="212" font-size="12" fill="#9AA3B2" text-anchor="middle">변경</text>
 
     <!-- korea client row -->
     <text x="40" y="244" font-size="12" fill="#9AA3B2">한국 클라이언트</text>
     <rect x="156" y="228" width="520" height="24" rx="7" fill="#1A1F2B" stroke="#1E2430"/>
-    <text x="166" y="244" font-size="11.5" fill="#E8E6E1" font-family="'Cascadia Code','Consolas',monospace">E:\FINAL FANTASY XIV - KOREA\game</text>
+    <text x="166" y="244" font-size="11.5" fill="#E8E6E1" font-family="'Cascadia Code','Consolas',monospace">E:\Games\FFXIV-KR\game</text>
     <rect x="684" y="228" width="56" height="24" rx="7" fill="#1A1F2B" stroke="#262C3A"/>
     <text x="712" y="244" font-size="12" fill="#9AA3B2" text-anchor="middle">변경</text>
 
