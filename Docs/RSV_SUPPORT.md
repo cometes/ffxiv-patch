@@ -9,7 +9,7 @@
 - Set `FFXIV_RSV_MAP_PATH` before running `Scripts\build-release.ps1` or `Scripts\build-test.ps1` to embed a local RSV map instead of downloading the default URL.
 - RSV replacement runs after a final EXD string is selected from the Korean source row and before the row is serialized.
 - Rows or columns intentionally preserved in the base/global language are not RSV-replaced. Those keep the base client RSV token so the base client/server path can resolve it normally.
-- `InstanceContentTextData#45500` is the exception: it keeps the Korean source row's `_rsv_45500_-1_6_...` token unresolved. The battle-dialogue renderer did not evaluate synthesized `MacroCode.Fixed` payloads, while U+E040/U+E041 text only imitated the visible brackets. Keeping the Korean RSV token lets the client render the Korean phrases through the native auto-translate path. Other `InstanceContentTextData` RSV rows are resolved to Korean text from `rsv.json`.
+- `InstanceContentTextData#45500` follows the Korean-source RSV replacement path. The external listing flattened each native `Icon(54/55)` envelope to `"   7 "`/`"   8 "`. The resolver restores those four macro envelopes before serialization, so the output keeps the Korean listing text with native auto-translate markers and no residual RSV token. Other `InstanceContentTextData` RSV rows continue through ordinary UTF-8 replacement.
 
 ## Language IDs
 
@@ -35,10 +35,12 @@ This is why a Korean source token such as `_rsv_..._-1_6_...` must not be interp
 
 Use `patch-diagnostics.tsv` for sheet-level checks and diagnostic CSV notes such as `rsv-resolved=1` or `rsv-unresolved=1`.
 
-2026-08-29 Korean native auto-translate correction:
+2026-09-01 Kefka greeting correction:
 
-- Direct U+E040/U+E041 text and synthesized `MacroCode.Fixed` payloads were both rejected by live testing because neither reproduced the native battle-dialogue auto-translate presentation. Preserving the selected global language's RSV token was also rejected because it produced the Japanese or English phrase instead of the requested Korean phrase.
-- The verifier now requires `InstanceContentTextData#45500` to contain exactly the Korean source `_rsv_45500_-1_6_0_0_S13095D61_E13095D61` token for every target client language. Literal Hangul, global-language RSV tokens, PUA glyphs, color macros, and `Fixed` payloads cannot pass this check.
+- Preserving the unresolved Korean source token produced a blank line in the global client. Preserving the global token produced untranslated Japanese or English, direct U+E040/U+E041 produced black arrows, and synthesized `MacroCode.Fixed` payloads were not evaluated by the battle-dialogue renderer.
+- Lumina defines macro `0x12` as `Icon`, and Dalamud defines bitmap-font icon IDs `54/55` as `AutoTranslateBegin`/`AutoTranslateEnd`. Their compact integer expressions encode as `0x37`/`0x38`, matching the external listing's flattened `"   7 "`/`"   8 "` markers.
+- The verifier requires `InstanceContentTextData#45500` to contain two `Icon(54)`/`Icon(55)` pairs, no flattened ASCII marker, and no residual RSV token.
+- This verifier proves the generated EXD byte contract only. The final battle-dialogue appearance remains open until it is confirmed in the client.
 
 ## Follow-up
 

@@ -7,6 +7,27 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
     {
         private sealed partial class Verifier
         {
+            private static readonly byte[] KefkaAutoTranslateOpenIcon =
+            {
+                0x02, 0x12, 0x02, 0x37, 0x03
+            };
+            private static readonly byte[] KefkaAutoTranslateCloseIcon =
+            {
+                0x02, 0x12, 0x02, 0x38, 0x03
+            };
+            private static readonly byte[] KefkaFlattenedOpenMarker =
+            {
+                0x20, 0x20, 0x20, 0x37, 0x20
+            };
+            private static readonly byte[] KefkaFlattenedCloseMarker =
+            {
+                0x20, 0x20, 0x20, 0x38, 0x20
+            };
+            private static readonly byte[] RsvTokenPrefix =
+            {
+                0x5F, 0x72, 0x73, 0x76, 0x5F
+            };
+
             private void VerifyCompactTimeRows()
             {
                 Console.WriteLine("[EXD] Compact time labels");
@@ -65,14 +86,65 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
 
             private void VerifyRsvAutoTranslateDelimiters()
             {
-                Console.WriteLine("[EXD] Korean native RSV auto-translate token preservation");
-                const string expectedToken =
-                    "_rsv_45500_-1_6_0_0_S13095D61_E13095D61";
-                ExpectBytes(
-                    "InstanceContentTextData#45500/Korean-source-RSV",
-                    GetFirstStringBytes(_patchedText, "InstanceContentTextData", 45500, _language),
-                    Encoding.ASCII.GetBytes(expectedToken));
+                Console.WriteLine("[EXD] Korean RSV listing resolution");
+                byte[] actual = GetFirstStringBytes(
+                    _patchedText,
+                    "InstanceContentTextData",
+                    45500,
+                    _language);
+                int openIcons = CountByteSequence(actual, KefkaAutoTranslateOpenIcon);
+                int closeIcons = CountByteSequence(actual, KefkaAutoTranslateCloseIcon);
+                int flattenedMarkers =
+                    CountByteSequence(actual, KefkaFlattenedOpenMarker) +
+                    CountByteSequence(actual, KefkaFlattenedCloseMarker);
+                int residualRsvTokens = CountByteSequence(actual, RsvTokenPrefix);
+                if (residualRsvTokens != 0 ||
+                    openIcons != 2 ||
+                    closeIcons != 2 ||
+                    flattenedMarkers != 0)
+                {
+                    Fail(
+                        "InstanceContentTextData#45500 marker shape is invalid: RSV={0}, open={1}, close={2}, flattened={3}",
+                        residualRsvTokens,
+                        openIcons,
+                        closeIcons,
+                        flattenedMarkers);
+                }
+                else
+                {
+                    Pass("InstanceContentTextData#45500 restores two native Icon(54/55) pairs");
+                }
+
                 ExpectTextContains("InstanceContentTextData", 45501, "죽을 준비");
+            }
+
+            private static int CountByteSequence(byte[] bytes, byte[] pattern)
+            {
+                if (bytes == null || pattern == null || pattern.Length == 0 || bytes.Length < pattern.Length)
+                {
+                    return 0;
+                }
+
+                int count = 0;
+                for (int offset = 0; offset <= bytes.Length - pattern.Length; offset++)
+                {
+                    bool matches = true;
+                    for (int index = 0; index < pattern.Length; index++)
+                    {
+                        if (bytes[offset + index] != pattern[index])
+                        {
+                            matches = false;
+                            break;
+                        }
+                    }
+
+                    if (matches)
+                    {
+                        count++;
+                    }
+                }
+
+                return count;
             }
 
 

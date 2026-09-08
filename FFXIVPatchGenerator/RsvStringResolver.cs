@@ -12,6 +12,17 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             new Dictionary<string, byte[]>(StringComparer.Ordinal),
             -1,
             null);
+        private const string FlattenedAutoTranslateOpen = "   7 ";
+        private const string FlattenedAutoTranslateClose = "   8 ";
+        private static readonly byte[] AutoTranslateOpenIcon =
+        {
+            0x02, 0x12, 0x02, 0x37, 0x03
+        };
+        private static readonly byte[] AutoTranslateCloseIcon =
+        {
+            0x02, 0x12, 0x02, 0x38, 0x03
+        };
+
 
         private readonly Dictionary<string, byte[]> _values;
         private readonly int _sourceRsvLanguageId;
@@ -71,13 +82,92 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                     continue;
                 }
 
-                values[entry.Key] = Encoding.UTF8.GetBytes(entry.Value);
+                values[entry.Key] = EncodeRsvValue(entry.Key, entry.Value);
             }
 
             return new RsvStringResolver(values, sourceRsvLanguageId, fullPath);
         }
 
 
+
+        private static byte[] EncodeRsvValue(string token, string value)
+        {
+            if (!IsKefkaKoreanAutoTranslateGreetingToken(token))
+            {
+                return Encoding.UTF8.GetBytes(value);
+            }
+
+            int firstClose = value.IndexOf(
+                FlattenedAutoTranslateClose,
+                FlattenedAutoTranslateOpen.Length,
+                StringComparison.Ordinal);
+            int secondOpen = firstClose < 0
+                ? -1
+                : value.IndexOf(
+                    FlattenedAutoTranslateOpen,
+                    firstClose + FlattenedAutoTranslateClose.Length,
+                    StringComparison.Ordinal);
+            int secondClose = secondOpen < 0
+                ? -1
+                : value.IndexOf(
+                    FlattenedAutoTranslateClose,
+                    secondOpen + FlattenedAutoTranslateOpen.Length,
+                    StringComparison.Ordinal);
+            if (!value.StartsWith(FlattenedAutoTranslateOpen, StringComparison.Ordinal) ||
+                firstClose < 0 ||
+                secondOpen < 0 ||
+                secondClose < 0 ||
+                secondClose + FlattenedAutoTranslateClose.Length != value.Length)
+            {
+                throw new InvalidDataException(
+                    "Known RSV auto-translate icon shape changed: " + token);
+            }
+
+            // The external listing is a lossy text rendering of Icon(54/55).
+            // Its non-printable envelope bytes became spaces, while the compact
+            // integer expressions 54+1 (0x37) and 55+1 (0x38) remained "7"/"8".
+            using (MemoryStream output = new MemoryStream(value.Length * 3))
+            {
+                WriteBytes(output, AutoTranslateOpenIcon);
+                WriteUtf8(
+                    output,
+                    value.Substring(
+                        FlattenedAutoTranslateOpen.Length,
+                        firstClose - FlattenedAutoTranslateOpen.Length));
+                WriteBytes(output, AutoTranslateCloseIcon);
+                WriteUtf8(
+                    output,
+                    value.Substring(
+                        firstClose + FlattenedAutoTranslateClose.Length,
+                        secondOpen - firstClose - FlattenedAutoTranslateClose.Length));
+                WriteBytes(output, AutoTranslateOpenIcon);
+                WriteUtf8(
+                    output,
+                    value.Substring(
+                        secondOpen + FlattenedAutoTranslateOpen.Length,
+                        secondClose - secondOpen - FlattenedAutoTranslateOpen.Length));
+                WriteBytes(output, AutoTranslateCloseIcon);
+                return output.ToArray();
+            }
+        }
+
+        private static bool IsKefkaKoreanAutoTranslateGreetingToken(string token)
+        {
+            const string keyPrefix = "_rsv_45500_-1_6_0_";
+            const string keySuffix = "_S13095D61_E13095D61";
+            return string.Equals(token, keyPrefix + "0" + keySuffix, StringComparison.Ordinal) ||
+                   string.Equals(token, keyPrefix + "1" + keySuffix, StringComparison.Ordinal);
+        }
+
+        private static void WriteUtf8(Stream output, string value)
+        {
+            WriteBytes(output, Encoding.UTF8.GetBytes(value));
+        }
+
+        private static void WriteBytes(Stream output, byte[] bytes)
+        {
+            output.Write(bytes, 0, bytes.Length);
+        }
 
         public RsvResolutionResult Resolve(byte[] input)
         {

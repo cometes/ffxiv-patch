@@ -18,6 +18,7 @@ artifacts/
 
 # Local patch/runtime data
 .tmp/
+.sandbox/
 generated-release/
 restore-baseline/
 backups/

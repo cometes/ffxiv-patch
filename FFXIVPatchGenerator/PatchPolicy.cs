@@ -53,7 +53,6 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             new RowRange(809, 816)
         };
         private const uint LobbyDataCenterConnectingRow = 808;
-        private const uint KefkaNativeAutoTranslateGreetingRow = 45500;
         private static readonly uint[] GlobalDataCenterTravelAddonRows = new uint[] { 12514, 12525 };
         private const ushort NameColumnOffset = 0;
         private static readonly ushort[] BaseLanguageNameColumnOffsets = new ushort[]
@@ -169,7 +168,6 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
         {
             PatchPolicy policy = new PatchPolicy();
             PatchSheetPolicy addonPolicy = policy.GetOrCreateSheetPolicy("Addon");
-            PatchSheetPolicy instanceContentTextDataPolicy = policy.GetOrCreateSheetPolicy("InstanceContentTextData");
             PatchSheetPolicy lobbyPolicy = policy.GetOrCreateSheetPolicy("Lobby");
             PatchSheetPolicy mainCommandPolicy = policy.GetOrCreateSheetPolicy("MainCommand");
             PatchSheetPolicy mkdSupportJobPolicy = policy.GetOrCreateSheetPolicy("MkdSupportJob");
@@ -207,11 +205,6 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 ApplyBaseLanguageColumns(policy, BaseLanguagePlaceNameColumnSheets, BaseLanguagePlaceNameColumnOffsets);
             }
 
-            // This Kefka line contains two Korean auto-translate phrases. Inline
-            // Fixed macros are not evaluated by the battle-dialogue renderer, and
-            // PUA bracket glyphs only imitate the appearance. Keep the Korean source
-            // RSV token unresolved so the client renders its native phrase payload.
-            instanceContentTextDataPolicy.PreserveSourceRsvRow(KefkaNativeAutoTranslateGreetingRow);
 
             // Global Addon rows 44/45/49 are compact h/m/s time-unit labels.
             // Korean "시간/분/초" overflows narrow global UI slots such as icon timers.
@@ -787,7 +780,6 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
         public readonly Dictionary<ushort, Dictionary<uint, ColumnRemap>> RowColumnRemaps = new Dictionary<ushort, Dictionary<uint, ColumnRemap>>();
         public readonly HashSet<uint> GlobalEnglishRows = new HashSet<uint>();
         public readonly HashSet<uint> GlobalTargetRows = new HashSet<uint>();
-        public readonly HashSet<uint> PreservedSourceRsvRows = new HashSet<uint>();
 
         private readonly bool _readOnly;
 
@@ -830,10 +822,6 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             return GlobalEnglishRows.Contains(rowId) || GlobalTargetRows.Contains(rowId);
         }
 
-        public bool ShouldPreserveSourceRsvRow(uint rowId)
-        {
-            return PreservedSourceRsvRows.Contains(rowId);
-        }
 
         public bool ShouldKeepColumn(uint rowId, ushort columnOffset)
         {
@@ -864,11 +852,6 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             GlobalTargetRows.Add(rowId);
         }
 
-        public void PreserveSourceRsvRow(uint rowId)
-        {
-            EnsureMutable();
-            PreservedSourceRsvRows.Add(rowId);
-        }
 
         public ColumnRemap GetColumnRemap(uint rowId, ushort columnOffset)
         {
