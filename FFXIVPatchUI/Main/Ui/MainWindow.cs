@@ -364,15 +364,18 @@ namespace FFXIVKoreanPatch.Main
 
             bool stackAction = width < 640;
             applyGrid.ColumnDefinitions[1].Width = new GridLength(stackAction ? 0 : 194);
-            Grid.SetColumnSpan(selectionSummaryPanel, stackAction ? 2 : 1);
+            applyGrid.ColumnDefinitions[2].Width = new GridLength(removeButton.Visibility == Visibility.Visible ? 128 : 0);
+            Grid.SetColumnSpan(selectionSummaryPanel, stackAction ? 3 : 1);
             Grid.SetRow(fullPatchButton, stackAction ? 1 : 0);
             Grid.SetColumn(fullPatchButton, stackAction ? 0 : 1);
             Grid.SetColumnSpan(fullPatchButton, stackAction ? 2 : 1);
             Grid.SetRow(testPatchButton, stackAction ? 1 : 0);
             Grid.SetColumn(testPatchButton, stackAction ? 0 : 1);
             Grid.SetColumnSpan(testPatchButton, stackAction ? 2 : 1);
+            Grid.SetRow(removeButton, stackAction ? 1 : 0);
             fullPatchButton.Margin = stackAction ? new Thickness(0, 9, 0, 0) : new Thickness(0);
             testPatchButton.Margin = fullPatchButton.Margin;
+            removeButton.Margin = new Thickness(12, stackAction ? 9 : 0, 0, 0);
         }
 
         private void InitializeStaticContent()

@@ -92,6 +92,28 @@
         </Setter.Value>
       </Setter>
     </Style>
+    <Style x:Key="RemoveActionButton" TargetType="Button" BasedOn="{StaticResource SubButton}">
+      <Setter Property="Foreground" Value="{StaticResource Red}"/>
+      <Setter Property="FontSize" Value="13"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="MinHeight" Value="44"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Bd" Background="#21181D" BorderBrush="#9A615C"
+                    BorderThickness="1" CornerRadius="7" Padding="10,8">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="#342024"/><Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource Red}"/></Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource GoldBright}"/></Trigger>
+              <Trigger Property="IsPressed" Value="True"><Setter TargetName="Bd" Property="Background" Value="#1B1418"/></Trigger>
+              <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.5"/></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
     <Style x:Key="Chip" TargetType="RadioButton">
       <Setter Property="Foreground" Value="#C9D0DB"/>
       <Setter Property="Cursor" Value="Hand"/>
@@ -245,12 +267,13 @@
       <Border Grid.Row="2" x:Name="ActionDock" AutomationProperties.AutomationId="ActionDock" Background="#121620" BorderBrush="#3E475B" BorderThickness="0,1,0,0" Padding="18,12,18,10">
         <StackPanel>
           <Border x:Name="GuardNote" Visibility="Collapsed" Background="#13D4AF6A" BorderBrush="#80693F" BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="0,0,0,10"><TextBlock x:Name="GuardNoteText" Foreground="#EFD29A" FontSize="11" TextWrapping="Wrap"/></Border>
-          <Grid x:Name="ApplyGrid"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="194"/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+          <Grid x:Name="ApplyGrid"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="194"/><ColumnDefinition Width="128"/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
             <StackPanel x:Name="SelectionSummaryPanel" VerticalAlignment="Center" Margin="0,0,14,0"><TextBlock Text="다음 적용 구성" Foreground="{StaticResource TextDim}" FontSize="10.5"/><TextBlock x:Name="TextProfileSummary" AutomationProperties.AutomationId="TextProfileSummary" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap"/><TextBlock x:Name="SelectionDetailText" AutomationProperties.AutomationId="SelectionDetailText" Foreground="{StaticResource TextDim}" FontSize="11" TextWrapping="Wrap" Margin="0,3,0,0"/></StackPanel>
             <Button x:Name="FullPatchButton" AutomationProperties.AutomationId="FullPatchButton" Grid.Column="1" Style="{StaticResource ActionButton}" Content="선택 구성 패치" Tag="선택한 구성과 한글 폰트를 적용합니다"/>
             <Button x:Name="TestPatchButton" AutomationProperties.AutomationId="TestPatchButton" Grid.Column="1" Style="{StaticResource ActionButton}" Visibility="Collapsed" Content="선택 구성 테스트" Tag="실제 클라이언트는 변경하지 않고 debug-apply 폴더에 생성·적용합니다"/>
+            <Button x:Name="RemoveButton" AutomationProperties.AutomationId="RemoveButton" Grid.Column="2" Style="{StaticResource RemoveActionButton}" Content="패치 제거" Margin="12,0,0,0" ToolTip="패치를 제거하고 원본 참조로 되돌립니다. 실행 전에 확인합니다."/>
           </Grid>
-          <DockPanel Margin="0,8,0,0"><TextBlock x:Name="SettingsSaveState" AutomationProperties.AutomationId="SettingsSaveState" DockPanel.Dock="Right" Text="선택 자동 저장" Foreground="{StaticResource TextDim}" FontSize="10.5" VerticalAlignment="Center"/><StackPanel Orientation="Horizontal"><Button x:Name="FontPatchButton" Style="{StaticResource TextAction}" Content="폰트만 패치" Foreground="{StaticResource Blue}" ToolTip="텍스트·UI 이미지는 원문으로 유지하고 한글 폰트만 적용"/><Button x:Name="RemoveButton" Style="{StaticResource TextAction}" Content="패치 제거" Foreground="{StaticResource Red}" Margin="12,0,0,0"/></StackPanel></DockPanel>
+          <DockPanel Margin="0,8,0,0"><TextBlock x:Name="SettingsSaveState" AutomationProperties.AutomationId="SettingsSaveState" DockPanel.Dock="Right" Text="선택 자동 저장" Foreground="{StaticResource TextDim}" FontSize="10.5" VerticalAlignment="Center"/><Button x:Name="FontPatchButton" Style="{StaticResource TextAction}" Content="폰트만 패치" Foreground="{StaticResource Blue}" HorizontalAlignment="Left" ToolTip="텍스트·UI 이미지는 원문으로 유지하고 한글 폰트만 적용"/></DockPanel>
           <Border BorderBrush="{StaticResource BorderBrushSoft}" BorderThickness="0,1,0,0" Padding="0,7,0,0" Margin="0,5,0,0"><DockPanel><TextBlock x:Name="FooterPercent" DockPanel.Dock="Right" Foreground="{StaticResource TextDim}" FontSize="11" Margin="10,0,0,0" VerticalAlignment="Center"/><Button x:Name="OpenLastLogButton" DockPanel.Dock="Right" Style="{StaticResource TextAction}" Content="로그 보기" Foreground="{StaticResource TextDim}" MinHeight="20" Padding="0" Margin="8,0,0,0"/><TextBlock x:Name="FooterStatus" Foreground="{StaticResource TextDim}" FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/></DockPanel></Border>
           <Border x:Name="ProgressTrack" Height="4" CornerRadius="2" Background="{StaticResource Panel2Bg}" ClipToBounds="True" Margin="0,5,0,0"><Border x:Name="ProgressFill" Width="0" Height="4" CornerRadius="2" HorizontalAlignment="Left" Background="{StaticResource Gold}"><Border.RenderTransform><TranslateTransform x:Name="ProgressMarqueeTransform" X="0"/></Border.RenderTransform></Border></Border>
         </StackPanel>
