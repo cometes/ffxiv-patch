@@ -22,6 +22,7 @@ namespace FFXIVKoreanPatch.Main
         Clean,
         Full,
         FontOnly,
+        UiAndFont,
         Mixed,
         Unreadable
     }
@@ -553,6 +554,10 @@ namespace FFXIVKoreanPatch.Main
                     break;
                 case ClientPatchState.FontOnly:
                     text = "폰트만 패치 적용됨";
+                    brush = dotBlue;
+                    break;
+                case ClientPatchState.UiAndFont:
+                    text = "UI 이미지·폰트 패치 적용됨";
                     brush = dotBlue;
                     break;
                 case ClientPatchState.Mixed:

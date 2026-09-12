@@ -141,12 +141,15 @@ namespace FFXIVKoreanPatch.Main
         // Global EXD language suffix to rewrite. Default is ja because the primary target is Japanese client.
         private string targetLanguageCode = "ja";
         private string targetLanguageDisplayName = "일본어";
+        private bool preserveBaseStoryText = false;
         private bool preserveBaseBnpcNames;
         private bool preserveBaseActionNames;
         private bool preserveBaseCommonPhrases;
         private bool preserveBaseDutyNames;
         private bool preserveBaseItemNames;
         private bool preserveBasePlaceNames;
+        private bool preserveBaseRemainderText = false;
+        private bool preserveBaseUiAssets = false;
 
         // Output directory used when generating release files locally.
         private string releaseOutputDir = string.Empty;
@@ -714,7 +717,7 @@ namespace FFXIVKoreanPatch.Main
                 return ClientPatchState.Clean;
             }
 
-            if (fontPatched && uiPatched && textPatched)
+            if (fontPatched && textPatched)
             {
                 return ClientPatchState.Full;
             }
@@ -722,6 +725,11 @@ namespace FFXIVKoreanPatch.Main
             if (fontPatched && !uiPatched && !textPatched)
             {
                 return ClientPatchState.FontOnly;
+            }
+
+            if (fontPatched && uiPatched && !textPatched)
+            {
+                return ClientPatchState.UiAndFont;
             }
 
             return ClientPatchState.Mixed;
@@ -2225,13 +2233,12 @@ namespace FFXIVKoreanPatch.Main
         private string WriteManifest(string outputDir, string applyGameDir, bool debugApply, string backupDir)
         {
             string manifestPath = Path.Combine(outputDir, "manifest.json");
-            List<string> manifestFiles = textPatchFiles
-                .Concat(fontPatchFiles)
-                .Concat(uiPatchFiles)
-                .Concat(restoreFiles.Select(fileName => "orig." + fileName))
+            string[] selectedFiles = GetSelectedPatchFiles();
+            List<string> manifestFiles = selectedFiles
+                .Concat(selectedFiles.Where(fileName => restoreFiles.Contains(fileName, StringComparer.OrdinalIgnoreCase))
+                    .Select(fileName => "orig." + fileName))
                 .Concat(new string[] { versionFileName })
                 .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Where(fileName => File.Exists(Path.Combine(outputDir, fileName)))
                 .ToList();
 
             StringBuilder sb = new StringBuilder();
@@ -3763,6 +3770,8 @@ namespace FFXIVKoreanPatch.Main
                 return;
             }
 
+            includeFontPatch = includeFontPatch || includeTextPatch;
+
             string[] selectedPatchFiles = GetPatchFilesForSelection(includeTextPatch, includeFontPatch);
 
 #if !TEST_BUILD
@@ -3887,16 +3896,21 @@ namespace FFXIVKoreanPatch.Main
             List<string> files = new List<string>();
             if (includeTextPatch)
             {
-                files.AddRange(textPatchFiles);
-            }
-
-            if (includeFontPatch)
-            {
-                files.AddRange(fontPatchFiles);
-                if (includeTextPatch)
+                if (!preserveBaseStoryText || !preserveBaseBnpcNames || !preserveBaseActionNames ||
+                    !preserveBaseDutyNames || !preserveBaseItemNames || !preserveBasePlaceNames ||
+                    !preserveBaseCommonPhrases || !preserveBaseRemainderText)
+                {
+                    files.AddRange(textPatchFiles);
+                }
+                if (!preserveBaseUiAssets || !preserveBaseRemainderText)
                 {
                     files.AddRange(uiPatchFiles);
                 }
+            }
+
+            if (includeFontPatch || includeTextPatch)
+            {
+                files.AddRange(fontPatchFiles);
             }
 
             return files.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();

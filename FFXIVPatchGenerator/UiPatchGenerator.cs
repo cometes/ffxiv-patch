@@ -83,6 +83,13 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
 
         public void Build()
         {
+            if (!_options.ShouldBuildUiPatch)
+            {
+                return;
+            }
+
+            bool buildLocalizedImages = _options.ShouldBuildLocalizedUiImages;
+            bool patchTextFonts = _options.ShouldPatchUiTextFonts;
             string globalGame = Path.GetFullPath(_options.GlobalGamePath);
             string koreaGame = Path.GetFullPath(_options.KoreaGamePath);
             string outputDir = Path.GetFullPath(_options.OutputPath);
@@ -92,8 +99,11 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             RequireFile(Path.Combine(globalSqpack, IndexFileName));
             RequireFile(Path.Combine(globalSqpack, Index2FileName));
             RequireFile(Path.Combine(globalSqpack, Dat0FileName));
-            RequireFile(Path.Combine(globalSqpack, ExcelIndexFileName));
-            RequireFile(Path.Combine(koreaSqpack, IndexFileName));
+            if (buildLocalizedImages)
+            {
+                RequireFile(ResolveExcelIndexForRead(globalSqpack));
+                RequireFile(Path.Combine(koreaSqpack, IndexFileName));
+            }
 
             string currentGlobalIndex = Path.Combine(globalSqpack, IndexFileName);
             string originalGlobalIndex = Path.Combine(globalSqpack, OrigIndexFileName);
@@ -115,11 +125,18 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
 
             Console.WriteLine("Using base global UI index: {0}", baseIndex);
             Console.WriteLine("Using base global UI index2:{0}", baseIndex2);
-            Console.WriteLine("Using Korean UI texture resources.");
+            if (buildLocalizedImages)
+            {
+                Console.WriteLine("Using Korean UI texture resources.");
+            }
 
             using (SqPackArchive globalUiArchive = new SqPackArchive(baseIndex, globalSqpack, "060000.win32"))
-            using (SqPackArchive koreaUiArchive = new SqPackArchive(Path.Combine(koreaSqpack, IndexFileName), koreaSqpack, "060000.win32"))
-            using (SqPackArchive globalExcelArchive = new SqPackArchive(ResolveExcelIndexForRead(globalSqpack), globalSqpack, "0a0000.win32"))
+            using (SqPackArchive koreaUiArchive = buildLocalizedImages
+                ? new SqPackArchive(Path.Combine(koreaSqpack, IndexFileName), koreaSqpack, "060000.win32")
+                : null)
+            using (SqPackArchive globalExcelArchive = buildLocalizedImages
+                ? new SqPackArchive(ResolveExcelIndexForRead(globalSqpack), globalSqpack, "0a0000.win32")
+                : null)
             using (SqPackIndexFile mutableIndex = new SqPackIndexFile(outputIndex))
             using (SqPackIndex2File mutableIndex2 = new SqPackIndex2File(outputIndex2))
             using (SqPackDatWriter datWriter = new SqPackDatWriter(outputDat4, Path.Combine(globalSqpack, Dat0FileName), PatchDataFileCount))
@@ -128,97 +145,106 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 mutableIndex2.EnsureDataFileCount(PatchDataFileCount);
 
                 int patched = 0;
-                HashSet<string> copiedTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                patched += CopyRequiredUiTexture(
-                    koreaUiArchive,
-                    mutableIndex,
-                    mutableIndex2,
-                    datWriter,
-                    PartyListTargetBaseTexPath,
-                    PartyListTargetBaseTexPath,
-                    "Korean PartyList target texture");
-                patched += PatchPartyBonusRoleFont(
-                    globalUiArchive,
-                    mutableIndex,
-                    mutableIndex2,
-                    datWriter);
-                patched += PatchDutyFinderRoleFont(
-                    globalUiArchive,
-                    mutableIndex,
-                    mutableIndex2,
-                    datWriter);
+                if (buildLocalizedImages)
+                {
+                    patched += CopyRequiredUiTexture(
+                        koreaUiArchive,
+                        mutableIndex,
+                        mutableIndex2,
+                        datWriter,
+                        PartyListTargetBaseTexPath,
+                        PartyListTargetBaseTexPath,
+                        "Korean PartyList target texture");
+                }
+                if (patchTextFonts)
+                {
+                    patched += PatchPartyBonusRoleFont(
+                        globalUiArchive,
+                        mutableIndex,
+                        mutableIndex2,
+                        datWriter);
+                    patched += PatchDutyFinderRoleFont(
+                        globalUiArchive,
+                        mutableIndex,
+                        mutableIndex2,
+                        datWriter);
+                }
                 // Keep data-center lobby ULD font slots byte-for-byte clean.
                 // The font patch preserves the clean global glyph route instead.
-                patched += CopyIconSheetImages(
-                    ScreenImageSpec,
-                    globalExcelArchive,
-                    globalUiArchive,
-                    koreaUiArchive,
-                    mutableIndex,
-                    mutableIndex2,
-                    datWriter,
-                    copiedTargets);
-                patched += CopyIconSheetImages(
-                    CutScreenImageSpec,
-                    globalExcelArchive,
-                    globalUiArchive,
-                    koreaUiArchive,
-                    mutableIndex,
-                    mutableIndex2,
-                    datWriter,
-                    copiedTargets);
-                patched += CopyIconSheetImages(
-                    DynamicEventScreenImageSpec,
-                    globalExcelArchive,
-                    globalUiArchive,
-                    koreaUiArchive,
-                    mutableIndex,
-                    mutableIndex2,
-                    datWriter,
-                    copiedTargets);
-                patched += CopyIconSheetImages(
-                    EventImageSpec,
-                    globalExcelArchive,
-                    globalUiArchive,
-                    koreaUiArchive,
-                    mutableIndex,
-                    mutableIndex2,
-                    datWriter,
-                    copiedTargets);
-                patched += CopyIconSheetImages(
-                    TradeScreenImageSpec,
-                    globalExcelArchive,
-                    globalUiArchive,
-                    koreaUiArchive,
-                    mutableIndex,
-                    mutableIndex2,
-                    datWriter,
-                    copiedTargets);
-                patched += CopyIconSheetImages(
-                    TerritoryTypeSpec,
-                    globalExcelArchive,
-                    globalUiArchive,
-                    koreaUiArchive,
-                    mutableIndex,
-                    mutableIndex2,
-                    datWriter,
-                    copiedTargets);
-                patched += CopyLoadingImages(
-                    globalExcelArchive,
-                    globalUiArchive,
-                    koreaUiArchive,
-                    mutableIndex,
-                    mutableIndex2,
-                    datWriter,
-                    copiedTargets);
-                patched += CopyMapTextures(
-                    globalExcelArchive,
-                    globalUiArchive,
-                    koreaUiArchive,
-                    mutableIndex,
-                    mutableIndex2,
-                    datWriter,
-                    copiedTargets);
+                if (buildLocalizedImages)
+                {
+                    HashSet<string> copiedTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    patched += CopyIconSheetImages(
+                        ScreenImageSpec,
+                        globalExcelArchive,
+                        globalUiArchive,
+                        koreaUiArchive,
+                        mutableIndex,
+                        mutableIndex2,
+                        datWriter,
+                        copiedTargets);
+                    patched += CopyIconSheetImages(
+                        CutScreenImageSpec,
+                        globalExcelArchive,
+                        globalUiArchive,
+                        koreaUiArchive,
+                        mutableIndex,
+                        mutableIndex2,
+                        datWriter,
+                        copiedTargets);
+                    patched += CopyIconSheetImages(
+                        DynamicEventScreenImageSpec,
+                        globalExcelArchive,
+                        globalUiArchive,
+                        koreaUiArchive,
+                        mutableIndex,
+                        mutableIndex2,
+                        datWriter,
+                        copiedTargets);
+                    patched += CopyIconSheetImages(
+                        EventImageSpec,
+                        globalExcelArchive,
+                        globalUiArchive,
+                        koreaUiArchive,
+                        mutableIndex,
+                        mutableIndex2,
+                        datWriter,
+                        copiedTargets);
+                    patched += CopyIconSheetImages(
+                        TradeScreenImageSpec,
+                        globalExcelArchive,
+                        globalUiArchive,
+                        koreaUiArchive,
+                        mutableIndex,
+                        mutableIndex2,
+                        datWriter,
+                        copiedTargets);
+                    patched += CopyIconSheetImages(
+                        TerritoryTypeSpec,
+                        globalExcelArchive,
+                        globalUiArchive,
+                        koreaUiArchive,
+                        mutableIndex,
+                        mutableIndex2,
+                        datWriter,
+                        copiedTargets);
+                    patched += CopyLoadingImages(
+                        globalExcelArchive,
+                        globalUiArchive,
+                        koreaUiArchive,
+                        mutableIndex,
+                        mutableIndex2,
+                        datWriter,
+                        copiedTargets);
+                    patched += CopyMapTextures(
+                        globalExcelArchive,
+                        globalUiArchive,
+                        koreaUiArchive,
+                        mutableIndex,
+                        mutableIndex2,
+                        datWriter,
+                        copiedTargets);
+                }
 
                 mutableIndex.Save();
                 mutableIndex2.Save();
@@ -226,7 +252,7 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 _report.UiFilesPatched += patched;
             }
 
-            ProgressReporter.Report(99, "UI texture patch saved");
+            ProgressReporter.Report(99, "UI patch saved");
         }
 
         private string ResolveExcelIndexForRead(string globalSqpack)

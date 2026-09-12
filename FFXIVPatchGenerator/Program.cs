@@ -25,9 +25,10 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
 
                 BuildOptions options = BuildOptions.Parse(args);
                 BuildReport report;
-                if (options.FontOnly)
+                if (options.FontOnly ||
+                    (!options.TextScopePolicy.MayUseKorean && string.IsNullOrEmpty(options.DiagnosticCsvSheet)))
                 {
-                    report = BuildFontOnly(options);
+                    report = BuildAssetsOnly(options);
                 }
                 else
                 {
@@ -145,7 +146,7 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             Console.WriteLine("  --base-font-index  Clean global 000000.win32.index to use instead of installed index.");
             Console.WriteLine("  --base-font-index2 Clean global 000000.win32.index2 to use instead of installed index2.");
             Console.WriteLine("  --skip-ui-texture-fix");
-            Console.WriteLine("                     Do not build the 060000 UI texture fixes with font patches.");
+            Console.WriteLine("                     Skip localized UI images; required ULD text-font repairs remain enabled.");
             Console.WriteLine("  --base-ui-index    Clean global 060000.win32.index to use instead of installed index.");
             Console.WriteLine("  --base-ui-index2   Clean global 060000.win32.index2 to use instead of installed index2.");
             Console.WriteLine("  --allow-patched-global");
@@ -154,7 +155,7 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             Console.WriteLine("                     Allow global/Korean ffxivgame.ver mismatch for diagnostics.");
         }
 
-        private static BuildReport BuildFontOnly(BuildOptions options)
+        private static BuildReport BuildAssetsOnly(BuildOptions options)
         {
             string globalGame = Path.GetFullPath(options.GlobalGamePath);
             string koreaGame = Path.GetFullPath(options.KoreaGamePath);
@@ -168,11 +169,18 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
 
             BuildReport report = new BuildReport();
             ProgressReporter.Report(2, "입력 파일 확인 완료");
-            ProgressReporter.Report(90, "폰트 패치 생성 중");
-            new FontPatchGenerator(options, report).Build();
-            if (options.ShouldBuildUiTextureFix)
+            if (options.AnonymizeQuestChatPhrasesRequested && !QuestChatPhraseAnonymizationFeature.Enabled && !options.FontOnly)
             {
-                ProgressReporter.Report(98, "UI texture patch build");
+                report.Warnings.Add(QuestChatPhraseAnonymizationFeature.DisabledWarning);
+            }
+            if (options.IncludeFont)
+            {
+                ProgressReporter.Report(90, "폰트 패치 생성 중");
+                new FontPatchGenerator(options, report).Build();
+            }
+            if (options.ShouldBuildUiPatch)
+            {
+                ProgressReporter.Report(98, "UI patch build");
                 new UiPatchGenerator(options, report).Build();
             }
             return report;
@@ -264,9 +272,19 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             get { return AnonymizeQuestChatPhrasesRequested && QuestChatPhraseAnonymizationFeature.Enabled; }
         }
 
-        public bool ShouldBuildUiTextureFix
+        public bool ShouldBuildLocalizedUiImages
         {
             get { return IncludeFont && !FontOnly && !SkipUiTextureFix && TextScopePolicy.Profile != TextPatchProfile.Story; }
+        }
+
+        public bool ShouldPatchUiTextFonts
+        {
+            get { return IncludeFont && !FontOnly && TextScopePolicy.GetOutcome(TextScope.Remainder) == TextScopeOutcome.Korean; }
+        }
+
+        public bool ShouldBuildUiPatch
+        {
+            get { return ShouldBuildLocalizedUiImages || ShouldPatchUiTextFonts; }
         }
 
         public static BuildOptions Parse(string[] args)

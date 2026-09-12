@@ -244,6 +244,7 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             string outputDir = Path.GetFullPath(_options.OutputPath);
             string globalSqpack = Path.Combine(globalGame, RepositoryDir);
             string koreaSqpack = Path.Combine(koreaGame, RepositoryDir);
+            bool buildTextPatch = _options.TextScopePolicy.MayUseKorean;
 
             ValidateInput(globalGame, globalSqpack, koreaGame, koreaSqpack);
             ClientVersionGuard.Validate(globalGame, koreaGame, _options.AllowVersionMismatch);
@@ -270,10 +271,13 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             string diagnosticCsvDir = Path.Combine(outputDir, "diagnostic-csv");
             _report.DiagnosticsPath = diagnosticsPath;
 
-            File.Copy(baseIndex, outputOrigIndex, true);
-            File.Copy(baseIndex, outputIndex, true);
-            File.Copy(baseIndex2, outputOrigIndex2, true);
-            File.Copy(baseIndex2, outputIndex2, true);
+            if (buildTextPatch)
+            {
+                File.Copy(baseIndex, outputOrigIndex, true);
+                File.Copy(baseIndex, outputIndex, true);
+                File.Copy(baseIndex2, outputOrigIndex2, true);
+                File.Copy(baseIndex2, outputIndex2, true);
+            }
             File.Copy(Path.Combine(globalGame, VersionFileName), Path.Combine(outputDir, VersionFileName), true);
 
             Console.WriteLine("Using base global index: {0}", baseIndex);
@@ -290,14 +294,19 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
 
             using (SqPackArchive globalArchive = new SqPackArchive(baseIndex, globalSqpack, "0a0000.win32"))
             using (SqPackArchive koreaArchive = new SqPackArchive(Path.Combine(koreaSqpack, IndexFileName), koreaSqpack, "0a0000.win32"))
-            using (SqPackIndexFile mutableIndex = new SqPackIndexFile(outputIndex))
-            using (SqPackIndex2File mutableIndex2 = new SqPackIndex2File(outputIndex2))
-            using (SqPackDatWriter datWriter = new SqPackDatWriter(outputDat1, Path.Combine(globalSqpack, Dat0FileName)))
+            using (SqPackIndexFile mutableIndex = buildTextPatch ? new SqPackIndexFile(outputIndex) : null)
+            using (SqPackIndex2File mutableIndex2 = buildTextPatch ? new SqPackIndex2File(outputIndex2) : null)
+            using (SqPackDatWriter datWriter = buildTextPatch
+                ? new SqPackDatWriter(outputDat1, Path.Combine(globalSqpack, Dat0FileName))
+                : null)
             using (StreamWriter diagnostics = new StreamWriter(diagnosticsPath, false, new UTF8Encoding(false)))
             {
                 diagnostics.WriteLine("sheet\tpage\tstatus\trows\tstringKeyRows\trowKeyRows\trsvRows\trsvStrings\tnote");
-                mutableIndex.EnsureDataFileCount(2);
-                mutableIndex2.EnsureDataFileCount(2);
+                if (buildTextPatch)
+                {
+                    mutableIndex.EnsureDataFileCount(2);
+                    mutableIndex2.EnsureDataFileCount(2);
+                }
 
                 byte[] rootBytes = globalArchive.ReadFile("exd/root.exl");
                 List<string> sheetNames = ExcelRootList.Parse(rootBytes);
@@ -321,17 +330,20 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                     ProcessSheet(sheetName, globalArchive, koreaArchive, mutableIndex, mutableIndex2, datWriter, diagnostics, targetLanguageId, sourceLanguageId, patchPolicyRoot, diagnosticCsvDir);
                 }
 
-                mutableIndex.Save();
-                mutableIndex2.Save();
+                if (buildTextPatch)
+                {
+                    mutableIndex.Save();
+                    mutableIndex2.Save();
+                }
             }
 
             if (_options.IncludeFont)
             {
                 ProgressReporter.Report(90, "폰트 패치 생성 중");
                 new FontPatchGenerator(_options, _report, _patchedOutputHangulCodepoints).Build();
-                if (_options.ShouldBuildUiTextureFix)
+                if (_options.ShouldBuildUiPatch)
                 {
-                    ProgressReporter.Report(98, "UI texture patch build");
+                    ProgressReporter.Report(98, "UI patch build");
                     new UiPatchGenerator(_options, _report).Build();
                 }
             }
@@ -550,7 +562,10 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             if (!textSheetScopePolicy.MayUseKorean)
             {
                 WriteDiagnostic(diagnostics, sheetName, "-", "text-profile-base-sheet", 0, 0, 0, 0, 0, TextScopePolicy.GetProfileId(_options.TextScopePolicy.Profile));
-                return;
+                if (!IsDiagnosticCsvRequested(sheetName))
+                {
+                    return;
+                }
             }
 
 
@@ -662,7 +677,11 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 }
 
                 ExcelDataFile targetExd = ExcelDataFile.Parse(targetExdBytes);
-                WriteDiagnosticCsvIfRequested(sheetName, page.StartId, diagnosticCsvDir, targetExd, sourceMaps, globalHeader, sourceHeader, stringColumns, allowRowKeyFallback, sheetPolicy, _rsvResolver);
+                WriteDiagnosticCsvIfRequested(sheetName, page.StartId, diagnosticCsvDir, targetExd, sourceMaps, globalHeader, sourceHeader, stringColumns, allowRowKeyFallback, sheetPolicy, textSheetScopePolicy, _rsvResolver);
+                if (!textSheetScopePolicy.MayUseKorean)
+                {
+                    continue;
+                }
                 ExdPatchResult patchResult = ExdStringPatcher.PatchDefaultVariant(
                     targetExd,
                     globalHeader,
@@ -727,6 +746,11 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 {
                     Console.WriteLine("  Patched EXD pages: {0}", _report.PagesPatched);
                 }
+            }
+
+            if (!textSheetScopePolicy.MayUseKorean)
+            {
+                return;
             }
 
             PatchSecondaryLanguageSafetyRows(
@@ -1149,6 +1173,12 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             return false;
         }
 
+        private bool IsDiagnosticCsvRequested(string sheetName)
+        {
+            return !string.IsNullOrEmpty(_options.DiagnosticCsvSheet) &&
+                string.Equals(NormalizeSheetName(_options.DiagnosticCsvSheet), NormalizeSheetName(sheetName), StringComparison.OrdinalIgnoreCase);
+        }
+
         private void WriteDiagnosticCsvIfRequested(
             string sheetName,
             uint pageStartId,
@@ -1160,10 +1190,10 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             List<int> stringColumns,
             bool allowRowKeyFallback,
             PatchSheetPolicy sheetPolicy,
+            TextSheetScopePolicy textSheetScopePolicy,
             RsvStringResolver rsvResolver)
         {
-            if (string.IsNullOrEmpty(_options.DiagnosticCsvSheet) ||
-                !string.Equals(NormalizeSheetName(_options.DiagnosticCsvSheet), NormalizeSheetName(sheetName), StringComparison.OrdinalIgnoreCase))
+            if (!IsDiagnosticCsvRequested(sheetName))
             {
                 return;
             }
@@ -1195,7 +1225,8 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                         string action = "replace";
                         string note = string.Empty;
 
-                        if (sheetPolicy.ShouldKeepRow(targetRow.RowId) || sheetPolicy.ShouldKeepColumn(targetRow.RowId, column.Offset))
+                        if (!textSheetScopePolicy.ShouldUseKorean(targetRow.RowId, column.Offset) ||
+                            sheetPolicy.ShouldKeepRow(targetRow.RowId) || sheetPolicy.ShouldKeepColumn(targetRow.RowId, column.Offset))
                         {
                             selectedBytes = globalBytes;
                             action = "keep-global";

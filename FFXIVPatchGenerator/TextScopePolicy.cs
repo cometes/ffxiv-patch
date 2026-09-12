@@ -46,6 +46,22 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
 
         public TextPatchProfile Profile { get; private set; }
 
+        public bool MayUseKorean
+        {
+            get
+            {
+                for (int i = 0; i < _outcomes.Length; i++)
+                {
+                    if (_outcomes[i] == TextScopeOutcome.Korean)
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+        }
+
         public static TextScopePolicy CreateFull()
         {
             TextScopeOutcome[] outcomes = new TextScopeOutcome[ScopeCount];
