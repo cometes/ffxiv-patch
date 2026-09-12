@@ -1,5 +1,5 @@
 using System;
-using System.Text;
+using FfxivKoreanPatch.FFXIVPatchGenerator;
 
 namespace FfxivKoreanPatch.PatchRouteVerifier
 {
@@ -22,10 +22,6 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
             private static readonly byte[] KefkaFlattenedCloseMarker =
             {
                 0x20, 0x20, 0x20, 0x38, 0x20
-            };
-            private static readonly byte[] RsvTokenPrefix =
-            {
-                0x5F, 0x72, 0x73, 0x76, 0x5F
             };
 
             private void VerifyCompactTimeRows()
@@ -87,25 +83,48 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
             private void VerifyRsvAutoTranslateDelimiters()
             {
                 Console.WriteLine("[EXD] Korean RSV listing resolution");
+                if (_koreanText == null)
+                {
+                    Fail("InstanceContentTextData#45500 requires a staged Korean source backup");
+                    return;
+                }
+
+                byte[] source = GetFirstStringBytes(
+                    _koreanText,
+                    "InstanceContentTextData",
+                    45500,
+                    _sourceLanguage);
+                RsvResolutionResult resolution = _rsvResolver.Resolve(source);
+                if (resolution.ResolvedTokens != 1 || resolution.UnresolvedTokens != 0)
+                {
+                    Fail(
+                        "InstanceContentTextData#45500 Korean RSV listing resolution was {0} resolved, {1} unresolved",
+                        resolution.ResolvedTokens,
+                        resolution.UnresolvedTokens);
+                    return;
+                }
+
                 byte[] actual = GetFirstStringBytes(
                     _patchedText,
                     "InstanceContentTextData",
                     45500,
                     _language);
+                ExpectBytes(
+                    "InstanceContentTextData#45500/" + _language + "/Korean-RSV-listing",
+                    actual,
+                    resolution.Bytes);
                 int openIcons = CountByteSequence(actual, KefkaAutoTranslateOpenIcon);
                 int closeIcons = CountByteSequence(actual, KefkaAutoTranslateCloseIcon);
                 int flattenedMarkers =
                     CountByteSequence(actual, KefkaFlattenedOpenMarker) +
                     CountByteSequence(actual, KefkaFlattenedCloseMarker);
-                int residualRsvTokens = CountByteSequence(actual, RsvTokenPrefix);
-                if (residualRsvTokens != 0 ||
+                if (RsvStringResolver.ContainsRsvToken(actual) ||
                     openIcons != 2 ||
                     closeIcons != 2 ||
                     flattenedMarkers != 0)
                 {
                     Fail(
-                        "InstanceContentTextData#45500 marker shape is invalid: RSV={0}, open={1}, close={2}, flattened={3}",
-                        residualRsvTokens,
+                        "InstanceContentTextData#45500 marker shape is invalid: open={0}, close={1}, flattened={2}",
                         openIcons,
                         closeIcons,
                         flattenedMarkers);
@@ -115,7 +134,19 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
                     Pass("InstanceContentTextData#45500 restores two native Icon(54/55) pairs");
                 }
 
-                ExpectTextContains("InstanceContentTextData", 45501, "죽을 준비");
+                byte[] followingSource = GetFirstStringBytes(
+                    _koreanText, "InstanceContentTextData", 45501, _sourceLanguage);
+                RsvResolutionResult followingResolution = _rsvResolver.Resolve(followingSource);
+                if (followingResolution.UnresolvedTokens != 0 ||
+                    followingResolution.Bytes == null || followingResolution.Bytes.Length == 0)
+                {
+                    Fail("InstanceContentTextData#45501 Korean source could not be resolved");
+                    return;
+                }
+                ExpectBytes(
+                    "InstanceContentTextData#45501/" + _language + "/Korean-RSV-listing",
+                    GetFirstStringBytes(_patchedText, "InstanceContentTextData", 45501, _language),
+                    followingResolution.Bytes);
             }
 
             private static int CountByteSequence(byte[] bytes, byte[] pattern)
@@ -141,6 +172,7 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
                     if (matches)
                     {
                         count++;
+                        offset += pattern.Length - 1;
                     }
                 }
 

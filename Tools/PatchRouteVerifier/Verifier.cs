@@ -15,11 +15,18 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
             private readonly string _globalTextSqpack;
             private readonly string _globalFontSqpack;
             private readonly string _globalUiSqpack;
+            private readonly string _cleanTextIndexPath;
             private readonly string _cleanFontIndexPath;
             private readonly string _cleanUiIndexPath;
             private readonly string _koreaSqpack;
             private readonly string _language;
+            private readonly string _sourceLanguage;
+            private readonly string _sheetLimit;
+            private readonly string _baselineOutputPath;
+            private readonly RsvStringResolver _rsvResolver;
             private readonly CompositeArchive _patchedText;
+            private readonly CompositeArchive _cleanText;
+            private readonly CompositeArchive _koreanText;
             private readonly CompositeArchive _patchedFont;
             private readonly CompositeArchive _patchedUi;
             private readonly CompositeArchive _generatedFont;
@@ -43,105 +50,144 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
                 string globalUiSqpack,
                 string koreaSqpack,
                 string language,
+                string sourceLanguage,
+                string sheetLimit,
                 string glyphDumpDir,
                 string[] selectedChecks,
                 string fontPackDir,
                 bool compareAppliedOutput,
+                string cleanTextIndexPath,
                 string cleanFontIndexPath,
-                string cleanUiIndexPath)
+                string cleanUiIndexPath,
+                string baselineOutputPath,
+                string rsvMapPath)
             {
                 _output = output;
                 _patchedSqpack = patchedSqpack;
                 _globalTextSqpack = globalTextSqpack;
                 _globalFontSqpack = globalFontSqpack;
                 _globalUiSqpack = globalUiSqpack;
-                _cleanFontIndexPath = ResolveCleanIndexPath(
-                    output,
-                    cleanFontIndexPath,
-                    language,
-                    "orig." + FontPrefix + ".index",
-                    globalFontSqpack,
-                    FontPrefix);
-                _cleanUiIndexPath = ResolveCleanIndexPath(
-                    output,
-                    cleanUiIndexPath,
-                    language,
-                    "orig." + UiPrefix + ".index",
-                    globalUiSqpack,
-                    UiPrefix);
                 _koreaSqpack = koreaSqpack;
                 _language = language;
+                _sourceLanguage = string.IsNullOrWhiteSpace(sourceLanguage) ? "ko" : sourceLanguage;
+                _sheetLimit = string.IsNullOrWhiteSpace(sheetLimit)
+                    ? null
+                    : sheetLimit.Trim().Replace('\\', '/').ToLowerInvariant();
                 _glyphDumpDir = glyphDumpDir;
                 _selectedChecks = selectedChecks;
                 _compareAppliedOutput = compareAppliedOutput;
+                _baselineOutputPath = string.IsNullOrWhiteSpace(baselineOutputPath)
+                    ? null
+                    : Path.GetFullPath(baselineOutputPath);
 
+                _cleanTextIndexPath = ResolveCleanTextIndexPath(
+                    output,
+                    cleanTextIndexPath,
+                    globalTextSqpack);
+                _rsvResolver = RsvStringResolver.Load(ResolveRsvMapPath(rsvMapPath), _sourceLanguage);
                 _patchedText = new CompositeArchive(
                     Path.Combine(patchedSqpack, TextPrefix + ".index"),
                     patchedSqpack,
                     globalTextSqpack,
+                    TextPrefix,
+                    _cleanTextIndexPath);
+                _cleanText = new CompositeArchive(
+                    _cleanTextIndexPath,
+                    globalTextSqpack,
+                    globalTextSqpack,
                     TextPrefix);
-                _patchedFont = new CompositeArchive(
-                    Path.Combine(patchedSqpack, FontPrefix + ".index"),
-                    patchedSqpack,
-                    globalFontSqpack,
-                    FontPrefix,
-                    _compareAppliedOutput ? _cleanFontIndexPath : null);
-                _patchedUi = new CompositeArchive(
-                    Path.Combine(patchedSqpack, UiPrefix + ".index"),
-                    patchedSqpack,
-                    globalUiSqpack,
-                    UiPrefix,
-                    _compareAppliedOutput ? _cleanUiIndexPath : null);
-                if (_compareAppliedOutput)
-                {
-                    _generatedFont = new CompositeArchive(
-                        Path.Combine(output, FontPrefix + ".index"),
-                        output,
-                        globalFontSqpack,
-                        FontPrefix,
-                        _cleanFontIndexPath);
-                    _generatedUi = new CompositeArchive(
-                        Path.Combine(output, UiPrefix + ".index"),
-                        output,
-                        globalUiSqpack,
-                        UiPrefix,
-                        _cleanUiIndexPath);
-                }
-
-                _cleanFont = new CompositeArchive(
-                    _cleanFontIndexPath,
-                    globalFontSqpack,
-                    globalFontSqpack,
-                    FontPrefix);
-                _cleanUi = new CompositeArchive(
-                    _cleanUiIndexPath,
-                    globalUiSqpack,
-                    globalUiSqpack,
-                    UiPrefix);
                 if (!string.IsNullOrWhiteSpace(koreaSqpack))
                 {
-                    _koreanFont = new CompositeArchive(
-                        Path.Combine(koreaSqpack, FontPrefix + ".index"),
+                    _koreanText = new CompositeArchive(
+                        Path.Combine(koreaSqpack, TextPrefix + ".index"),
                         koreaSqpack,
                         koreaSqpack,
-                        FontPrefix);
+                        TextPrefix);
                 }
 
-                _ttmpFont = TtmpFontPackage.TryOpen(fontPackDir);
-
-                if (!string.IsNullOrWhiteSpace(_glyphDumpDir))
+                bool textProfileOnly = IsTextProfileOnlySelection(selectedChecks);
+                if (!textProfileOnly)
                 {
-                    Directory.CreateDirectory(_glyphDumpDir);
-                    File.WriteAllText(
-                        Path.Combine(_glyphDumpDir, "glyph-report.tsv"),
-                        "group\tfont\tcodepoint\tchar\tvisible\tcomponents\tsmall_components\tbbox\timage_index\ttexture\tx\ty\twidth\theight\toffset_x\toffset_y\tpng" + Environment.NewLine,
-                        Encoding.UTF8);
+                    _cleanFontIndexPath = ResolveCleanIndexPath(
+                        output,
+                        cleanFontIndexPath,
+                        language,
+                        "orig." + FontPrefix + ".index",
+                        globalFontSqpack,
+                        FontPrefix);
+                    _cleanUiIndexPath = ResolveCleanIndexPath(
+                        output,
+                        cleanUiIndexPath,
+                        language,
+                        "orig." + UiPrefix + ".index",
+                        globalUiSqpack,
+                        UiPrefix);
+
+                    _patchedFont = new CompositeArchive(
+                        Path.Combine(patchedSqpack, FontPrefix + ".index"),
+                        patchedSqpack,
+                        globalFontSqpack,
+                        FontPrefix,
+                        _compareAppliedOutput ? _cleanFontIndexPath : null);
+                    _patchedUi = new CompositeArchive(
+                        Path.Combine(patchedSqpack, UiPrefix + ".index"),
+                        patchedSqpack,
+                        globalUiSqpack,
+                        UiPrefix,
+                        _compareAppliedOutput ? _cleanUiIndexPath : null);
+                    if (_compareAppliedOutput)
+                    {
+                        _generatedFont = new CompositeArchive(
+                            Path.Combine(output, FontPrefix + ".index"),
+                            output,
+                            globalFontSqpack,
+                            FontPrefix,
+                            _cleanFontIndexPath);
+                        _generatedUi = new CompositeArchive(
+                            Path.Combine(output, UiPrefix + ".index"),
+                            output,
+                            globalUiSqpack,
+                            UiPrefix,
+                            _cleanUiIndexPath);
+                    }
+
+                    _cleanFont = new CompositeArchive(
+                        _cleanFontIndexPath,
+                        globalFontSqpack,
+                        globalFontSqpack,
+                        FontPrefix);
+                    _cleanUi = new CompositeArchive(
+                        _cleanUiIndexPath,
+                        globalUiSqpack,
+                        globalUiSqpack,
+                        UiPrefix);
+                    if (!string.IsNullOrWhiteSpace(koreaSqpack))
+                    {
+                        _koreanFont = new CompositeArchive(
+                            Path.Combine(koreaSqpack, FontPrefix + ".index"),
+                            koreaSqpack,
+                            koreaSqpack,
+                            FontPrefix);
+                    }
+
+                    _ttmpFont = TtmpFontPackage.TryOpen(fontPackDir);
+
+                    if (!string.IsNullOrWhiteSpace(_glyphDumpDir))
+                    {
+                        Directory.CreateDirectory(_glyphDumpDir);
+                        File.WriteAllText(
+                            Path.Combine(_glyphDumpDir, "glyph-report.tsv"),
+                            "group\tfont\tcodepoint\tchar\tvisible\tcomponents\tsmall_components\tbbox\timage_index\ttexture\tx\ty\twidth\theight\toffset_x\toffset_y\tpng" + Environment.NewLine,
+                            Encoding.UTF8);
+                    }
                 }
             }
 
             public void Run()
             {
                 using (_patchedText)
+                using (_cleanText)
+                using (_koreanText)
                 using (_patchedFont)
                 using (_patchedUi)
                 using (_generatedFont)
@@ -155,6 +201,7 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
                     Console.WriteLine("  output: {0}", _output);
                     Console.WriteLine("  patched sqpack: {0}", _patchedSqpack);
                     Console.WriteLine("  global text sqpack: {0}", _globalTextSqpack);
+                    Console.WriteLine("  clean text index: {0}", _cleanTextIndexPath);
                     Console.WriteLine("  global font sqpack: {0}", _globalFontSqpack);
                     Console.WriteLine("  global ui sqpack: {0}", _globalUiSqpack);
                     Console.WriteLine("  clean font index: {0}", _cleanFontIndexPath);
@@ -162,6 +209,14 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
                     if (!string.IsNullOrWhiteSpace(_koreaSqpack))
                     {
                         Console.WriteLine("  korea sqpack: {0}", _koreaSqpack);
+                    }
+                    if (!string.IsNullOrWhiteSpace(_baselineOutputPath))
+                    {
+                        Console.WriteLine("  baseline output: {0}", _baselineOutputPath);
+                    }
+                    if (_rsvResolver != null && _rsvResolver.IsEnabled)
+                    {
+                        Console.WriteLine("  RSV map: {0}", _rsvResolver.SourcePath);
                     }
                     if (!string.IsNullOrWhiteSpace(_glyphDumpDir))
                     {
@@ -175,6 +230,75 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
                     Console.WriteLine();
                     Console.WriteLine(Failed ? "RESULT: FAIL" : "RESULT: PASS");
                 }
+            }
+
+            private static bool IsTextProfileOnlySelection(string[] selectedChecks)
+            {
+                if (selectedChecks == null || selectedChecks.Length == 0)
+                {
+                    return false;
+                }
+
+                HashSet<string> textChecks = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    "story-text-profile-scopes",
+                    "story-instance-content-boundary",
+                    "story-sestring-structure",
+                    "story-ui-assets",
+                    "full-text-output-regression",
+                    "rsv-auto-translate-delimiters"
+                };
+                for (int i = 0; i < selectedChecks.Length; i++)
+                {
+                    if (!textChecks.Contains(selectedChecks[i]))
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+
+            private static string ResolveCleanTextIndexPath(
+                string output,
+                string explicitIndexPath,
+                string globalTextSqpack)
+            {
+                if (!string.IsNullOrWhiteSpace(explicitIndexPath))
+                {
+                    string fullPath = Path.GetFullPath(explicitIndexPath);
+                    if (!File.Exists(fullPath))
+                    {
+                        throw new FileNotFoundException("explicit clean text index file was not found", fullPath);
+                    }
+
+                    return fullPath;
+                }
+
+                string outputOrig = Path.Combine(output, "orig." + TextPrefix + ".index");
+                if (File.Exists(outputOrig))
+                {
+                    return Path.GetFullPath(outputOrig);
+                }
+
+                return Path.Combine(globalTextSqpack, TextPrefix + ".index");
+            }
+
+            private static string ResolveRsvMapPath(string explicitPath)
+            {
+                if (!string.IsNullOrWhiteSpace(explicitPath))
+                {
+                    return explicitPath.Trim('"');
+                }
+
+                string executablePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "rsv.json");
+                if (File.Exists(executablePath))
+                {
+                    return executablePath;
+                }
+
+                string workingPath = Path.Combine(Environment.CurrentDirectory, "rsv.json");
+                return File.Exists(workingPath) ? workingPath : null;
             }
 
             private static string ResolveCleanIndexPath(

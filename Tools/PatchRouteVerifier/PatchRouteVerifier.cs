@@ -67,12 +67,17 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
                     globalUiSqpack,
                     koreaSqpack,
                     language,
+                    options.SourceLanguage,
+                    options.SheetLimit,
                     glyphDumpDir,
                     options.Checks,
                     options.FontPackDir,
                     compareAppliedOutput,
+                    options.CleanTextIndexPath,
                     cleanFontIndex,
-                    cleanUiIndex);
+                    cleanUiIndex,
+                    options.BaselineOutputPath,
+                    options.RsvMapPath);
                 verifier.Run();
                 return verifier.Failed ? 1 : 0;
             }
@@ -86,7 +91,8 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
 
         private static void PrintUsage()
         {
-            Console.WriteLine("PatchRouteVerifier.exe --output <patch-output-dir> --global <global-game-dir> [--global-text <game-dir>] [--global-font <game-dir>] [--global-ui <game-dir>] [--clean-font-index <index>] [--clean-ui-index <index>] [--korea <korean-game-dir>] [--applied-game <game-dir>] [--target-language ja] [--font-pack-dir <dir>] [--glyph-dump-dir <dir>] [--no-glyph-dump] [--checks <name[,name]>]");
+            Console.WriteLine("PatchRouteVerifier.exe --output <patch-output-dir> --global <staged-global-game-dir> [--global-text <staged-game-dir>] [--global-font <staged-game-dir>] [--global-ui <staged-game-dir>] [--clean-text-index <index>] [--clean-font-index <index>] [--clean-ui-index <index>] [--korea <staged-source-game-dir>] [--baseline-output <dir>] [--rsv-map <json>] [--applied-game <game-dir>] [--target-language ja] [--source-language ko] [--sheet <story-sheet>] [--font-pack-dir <dir>] [--glyph-dump-dir <dir>] [--no-glyph-dump] [--checks <name[,name]>]");
+            Console.WriteLine("Story scenarios and full-text-output-regression run only when explicitly selected with --checks.");
         }
 
     }

@@ -823,6 +823,7 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
         }
 
 
+
         public bool ShouldKeepColumn(uint rowId, ushort columnOffset)
         {
             return PreservedGlobalColumns.Contains(columnOffset) || GetColumnRemap(rowId, columnOffset).Mode == ColumnRemapMode.KeepGlobal;
@@ -851,6 +852,7 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             EnsureMutable();
             GlobalTargetRows.Add(rowId);
         }
+
 
 
         public ColumnRemap GetColumnRemap(uint rowId, ushort columnOffset)

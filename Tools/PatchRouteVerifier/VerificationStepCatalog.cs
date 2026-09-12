@@ -8,6 +8,11 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
             {
                 return new VerificationStep[]
                 {
+                    new VerificationStep("story-text-profile-scopes", VerifyStoryTextProfileScopes, runByDefault: false),
+                    new VerificationStep("story-instance-content-boundary", VerifyStoryInstanceContentBoundary, runByDefault: false),
+                    new VerificationStep("story-sestring-structure", VerifyStorySeStringStructure, runByDefault: false),
+                    new VerificationStep("story-ui-assets", VerifyStoryUiAssets, runByDefault: false),
+                    new VerificationStep("full-text-output-regression", VerifyFullTextOutputRegression, runByDefault: false),
                     new VerificationStep("font-only-output-scope", VerifyFontOnlyOutputScope),
                     new VerificationStep("applied-output-files", VerifyAppliedOutputFiles),
                     new VerificationStep("applied-lobby-routes", VerifyAppliedLobbyRoutes),

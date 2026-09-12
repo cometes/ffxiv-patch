@@ -32,6 +32,7 @@
     <Reference Include="System.Drawing" />
     <Reference Include="System.IO.Compression" />
     <Reference Include="System.IO.Compression.FileSystem" />
+    <Reference Include="System.Web.Extensions" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" PrivateAssets="all" />
@@ -121,6 +122,9 @@
     <Compile Include="ProtectedGlyphVerification.cs" />
     <Compile Include="PvpProfileFontVerification.cs" />
     <Compile Include="ReportedInGamePhraseVerification.cs" />
+    <Compile Include="SeStringStructureVerification.cs" />
+    <Compile Include="StoryTextProfileVerification.cs" />
+    <Compile Include="FullTextOutputRegressionVerification.cs" />
     <Compile Include="SharedUiFontConsistencyVerification.cs" />
     <Compile Include="ThirdPartyGameFontSafetyVerification.cs" />
     <Compile Include="TtmpFontPackage.cs" />
@@ -167,6 +171,12 @@
     </Compile>
     <Compile Include="..\..\FFXIVPatchGenerator\HashAndEndian.cs">
       <Link>Generator\HashAndEndian.cs</Link>
+    </Compile>
+    <Compile Include="..\..\FFXIVPatchGenerator\TextScopePolicy.cs">
+      <Link>Generator\TextScopePolicy.cs</Link>
+    </Compile>
+    <Compile Include="..\..\FFXIVPatchGenerator\RsvStringResolver.cs">
+      <Link>Generator\RsvStringResolver.cs</Link>
     </Compile>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

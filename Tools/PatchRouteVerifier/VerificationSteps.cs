@@ -18,7 +18,7 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
 
                 for (int i = 0; i < steps.Length; i++)
                 {
-                    if (selected == null || selected.Contains(steps[i].Name))
+                    if (selected == null ? steps[i].RunByDefault : selected.Contains(steps[i].Name))
                     {
                         steps[i].Run();
                     }

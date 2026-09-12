@@ -12,11 +12,16 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
             public string GlobalTextGamePath;
             public string GlobalFontGamePath;
             public string GlobalUiGamePath;
+            public string CleanTextIndexPath;
             public string CleanFontIndexPath;
             public string CleanUiIndexPath;
             public string KoreaGamePath;
             public string FontPackDir;
+            public string BaselineOutputPath;
+            public string RsvMapPath;
             public string TargetLanguage = "ja";
+            public string SourceLanguage = "ko";
+            public string SheetLimit;
             public string GlyphDumpDir;
             public string[] Checks;
             public bool NoGlyphDump;
@@ -53,6 +58,10 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
                     {
                         options.GlobalUiGamePath = RequireValue(args, ref i, arg);
                     }
+                    else if (string.Equals(arg, "--clean-text-index", StringComparison.OrdinalIgnoreCase))
+                    {
+                        options.CleanTextIndexPath = RequireValue(args, ref i, arg);
+                    }
                     else if (string.Equals(arg, "--clean-font-index", StringComparison.OrdinalIgnoreCase))
                     {
                         options.CleanFontIndexPath = RequireValue(args, ref i, arg);
@@ -65,6 +74,14 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
                     {
                         options.KoreaGamePath = RequireValue(args, ref i, arg);
                     }
+                    else if (string.Equals(arg, "--baseline-output", StringComparison.OrdinalIgnoreCase))
+                    {
+                        options.BaselineOutputPath = RequireValue(args, ref i, arg);
+                    }
+                    else if (string.Equals(arg, "--rsv-map", StringComparison.OrdinalIgnoreCase))
+                    {
+                        options.RsvMapPath = RequireValue(args, ref i, arg);
+                    }
                     else if (string.Equals(arg, "--font-pack-dir", StringComparison.OrdinalIgnoreCase))
                     {
                         options.FontPackDir = RequireValue(args, ref i, arg);
@@ -76,6 +93,14 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
                     else if (string.Equals(arg, "--target-language", StringComparison.OrdinalIgnoreCase))
                     {
                         options.TargetLanguage = RequireValue(args, ref i, arg);
+                    }
+                    else if (string.Equals(arg, "--source-language", StringComparison.OrdinalIgnoreCase))
+                    {
+                        options.SourceLanguage = RequireValue(args, ref i, arg);
+                    }
+                    else if (string.Equals(arg, "--sheet", StringComparison.OrdinalIgnoreCase))
+                    {
+                        options.SheetLimit = RequireValue(args, ref i, arg);
                     }
                     else if (string.Equals(arg, "--glyph-dump-dir", StringComparison.OrdinalIgnoreCase))
                     {

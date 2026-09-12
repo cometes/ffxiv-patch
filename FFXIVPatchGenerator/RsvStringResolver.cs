@@ -88,8 +88,6 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             return new RsvStringResolver(values, sourceRsvLanguageId, fullPath);
         }
 
-
-
         private static byte[] EncodeRsvValue(string token, string value)
         {
             if (!IsKefkaKoreanAutoTranslateGreetingToken(token))

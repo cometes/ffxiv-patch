@@ -10,11 +10,13 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
             {
                 public readonly string Name;
                 public readonly Action Run;
+                public readonly bool RunByDefault;
 
-                public VerificationStep(string name, Action run)
+                public VerificationStep(string name, Action run, bool runByDefault = true)
                 {
                     Name = name;
                     Run = run;
+                    RunByDefault = runByDefault;
                 }
             }
         }
