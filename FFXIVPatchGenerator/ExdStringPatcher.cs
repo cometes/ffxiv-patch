@@ -448,9 +448,11 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
 
                 ExcelHeader rowSourceHeader = sourceRow.Header ?? sourceHeader;
                 byte[] replacement = sourceRow.File.GetStringBytesByColumnOffset(sourceRow.Row, rowSourceHeader, targetColumn.Offset);
+                bool useKorean = patchPolicy == null ||
+                    patchPolicy.TextSheetScopePolicy.ShouldUseKorean(targetRow.RowId, targetColumn.Offset);
                 byte[] selected = original;
                 bool allowRsvResolution = false;
-                if (sheetPolicy.ShouldKeepColumn(targetRow.RowId, targetColumn.Offset))
+                if (!useKorean || sheetPolicy.ShouldKeepColumn(targetRow.RowId, targetColumn.Offset))
                 {
                     selected = original;
                 }
@@ -518,7 +520,7 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                     }
                 }
 
-                if (sheetPolicy.GlobalEnglishRows.Contains(targetRow.RowId))
+                if (useKorean && sheetPolicy.GlobalEnglishRows.Contains(targetRow.RowId))
                 {
                     allowRsvResolution = false;
                     byte[] normalizedEnglish = NormalizeGlobalEnglishFallbackBytes(selected);
@@ -529,7 +531,10 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                     }
                 }
 
-                if (allowRsvResolution && patchPolicy != null && patchPolicy.RsvResolver != null && patchPolicy.RsvResolver.IsEnabled)
+                if (allowRsvResolution &&
+                    patchPolicy != null &&
+                    patchPolicy.RsvResolver != null &&
+                    patchPolicy.RsvResolver.IsEnabled)
                 {
                     RsvResolutionResult rsvResolution = patchPolicy.RsvResolver.Resolve(selected);
                     if (rsvResolution.Changed)
@@ -1529,14 +1534,15 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
 
     internal sealed class StringPatchPolicy
     {
-        public static readonly StringPatchPolicy Default = new StringPatchPolicy(null, false, false, PatchSheetPolicy.Empty);
-        public static readonly StringPatchPolicy ProtectAddonUiGlyphs = new StringPatchPolicy("Addon", true, true, PatchSheetPolicy.Empty);
+        public static readonly StringPatchPolicy Default = new StringPatchPolicy(null, false, false, PatchSheetPolicy.Empty, RsvStringResolver.Empty, TextScopePolicy.CreateFull());
+        public static readonly StringPatchPolicy ProtectAddonUiGlyphs = new StringPatchPolicy("Addon", true, true, PatchSheetPolicy.Empty, RsvStringResolver.Empty, TextScopePolicy.CreateFull());
 
         public readonly string SheetName;
         public readonly bool ProtectShortNonKoreanUiTokens;
         public readonly bool ProtectUiSeStringStructure;
         public readonly PatchSheetPolicy SheetPolicy;
         public readonly RsvStringResolver RsvResolver;
+        public readonly TextSheetScopePolicy TextSheetScopePolicy;
 
         public StringPatchPolicy(bool protectShortNonKoreanUiTokens, PatchSheetPolicy sheetPolicy)
             : this(protectShortNonKoreanUiTokens, protectShortNonKoreanUiTokens, sheetPolicy)
@@ -1559,12 +1565,24 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
         }
 
         public StringPatchPolicy(string sheetName, bool protectShortNonKoreanUiTokens, bool protectUiSeStringStructure, PatchSheetPolicy sheetPolicy, RsvStringResolver rsvResolver)
+            : this(sheetName, protectShortNonKoreanUiTokens, protectUiSeStringStructure, sheetPolicy, rsvResolver, TextScopePolicy.CreateFull())
+        {
+        }
+
+        public StringPatchPolicy(
+            string sheetName,
+            bool protectShortNonKoreanUiTokens,
+            bool protectUiSeStringStructure,
+            PatchSheetPolicy sheetPolicy,
+            RsvStringResolver rsvResolver,
+            TextScopePolicy textScopePolicy)
         {
             SheetName = sheetName;
             ProtectShortNonKoreanUiTokens = protectShortNonKoreanUiTokens;
             ProtectUiSeStringStructure = protectUiSeStringStructure;
             SheetPolicy = sheetPolicy ?? PatchSheetPolicy.Empty;
             RsvResolver = rsvResolver ?? RsvStringResolver.Empty;
+            TextSheetScopePolicy = (textScopePolicy ?? TextScopePolicy.CreateFull()).ForSheet(sheetName);
         }
     }
 

@@ -37,6 +37,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Program.cs" />
+    <Compile Include="TextScopePolicy.cs" />
     <Compile Include="TextPatchGenerator.cs" />
     <Compile Include="FontPatchGenerator.cs" />
     <Compile Include="ActionDetailHighScaleHangulGlyphs.cs" />

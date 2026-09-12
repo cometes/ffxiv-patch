@@ -14,6 +14,7 @@ New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 $sources = @(
     "Program.cs",
     "TextPatchGenerator.cs",
+    "TextScopePolicy.cs",
     "FontPatchGenerator.cs",
     "ActionDetailHighScaleHangulGlyphs.cs",
     "PvpProfileVisualScaleGlyphs.cs",

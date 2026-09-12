@@ -59,6 +59,7 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 Console.WriteLine("  Font files patched:   {0}", report.FontFilesPatched);
                 Console.WriteLine("  Font files skipped:   {0}", report.FontFilesSkippedByProfile);
                 Console.WriteLine("  UI files patched:     {0}", report.UiFilesPatched);
+                Console.WriteLine("  Text profile:        {0}", TextScopePolicy.GetProfileId(options.TextScopePolicy.Profile));
                 Console.WriteLine("  Output:               {0}", Path.GetFullPath(options.OutputPath));
                 if (!string.IsNullOrEmpty(report.DiagnosticsPath))
                 {
@@ -110,6 +111,9 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             Console.WriteLine("Optional:");
             Console.WriteLine("  --target-language  Global language slot to replace. Default: ja");
             Console.WriteLine("  --source-language  Korean source language slot. Default: ko");
+            Console.WriteLine("  --text-profile     Text composition: full, story, or custom. Default: full.");
+            Console.WriteLine("  --text-scope-outcomes <csv>");
+            Console.WriteLine("                     Required with custom. Example: story=ko,bnpc=base,actions=base,duty=base,item=base,place=base,common=base,remainder=base");
             Console.WriteLine("  --sheet            Limit to one root.exl sheet name for testing.");
             Console.WriteLine("  --policy           Optional JSON patch policy file.");
             Console.WriteLine("  --rsv-map          Optional RSV token map JSON. Also auto-detected beside the generator exe.");
@@ -245,6 +249,7 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
         public string BaseUiIndex2Path;
         public string FontPackDir;
         public string FontPatchProfile = FontPatchProfiles.Default;
+        public TextScopePolicy TextScopePolicy = TextScopePolicy.CreateFull();
         public bool IncludeFont;
         public bool FontOnly;
         public bool AllowPatchedGlobal;
@@ -261,7 +266,7 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
 
         public bool ShouldBuildUiTextureFix
         {
-            get { return IncludeFont && !FontOnly && !SkipUiTextureFix; }
+            get { return IncludeFont && !FontOnly && !SkipUiTextureFix && TextScopePolicy.Profile != TextPatchProfile.Story; }
         }
 
         public static BuildOptions Parse(string[] args)
@@ -395,6 +400,19 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             {
                 options.SourceLanguage = value.ToLowerInvariant();
             }
+            string textProfile = "full";
+            if (values.TryGetValue("--text-profile", out value))
+            {
+                textProfile = value.Trim('"');
+            }
+
+            string textScopeOutcomes = null;
+            if (values.TryGetValue("--text-scope-outcomes", out value))
+            {
+                textScopeOutcomes = value.Trim('"');
+            }
+
+            options.TextScopePolicy = TextScopePolicy.Parse(textProfile, textScopeOutcomes);
 
             if (values.TryGetValue("--sheet", out value))
             {

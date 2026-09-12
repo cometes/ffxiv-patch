@@ -546,6 +546,13 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 WriteDiagnostic(diagnostics, sheetName, "-", "policy-skip-sheet", 0, 0, 0, 0, 0, string.Empty);
                 return;
             }
+            TextSheetScopePolicy textSheetScopePolicy = _options.TextScopePolicy.ForSheet(sheetName);
+            if (!textSheetScopePolicy.MayUseKorean)
+            {
+                WriteDiagnostic(diagnostics, sheetName, "-", "text-profile-base-sheet", 0, 0, 0, 0, 0, TextScopePolicy.GetProfileId(_options.TextScopePolicy.Profile));
+                return;
+            }
+
 
             PatchSheetPolicy sheetPolicy = patchPolicyRoot.GetSheetPolicy(sheetName);
 
@@ -638,7 +645,8 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 IsAddonSheet(sheetName),
                 IsAddonSheet(sheetName),
                 sheetPolicy,
-                _rsvResolver);
+                _rsvResolver,
+                _options.TextScopePolicy);
 
             for (int i = 0; i < globalHeader.Pages.Count; i++)
             {
@@ -760,7 +768,10 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             StringPatchPolicy stringPatchPolicy = new StringPatchPolicy(
                 sheetName,
                 IsAddonSheet(sheetName),
-                sheetPolicy);
+                IsAddonSheet(sheetName),
+                sheetPolicy,
+                RsvStringResolver.Empty,
+                _options.TextScopePolicy);
 
             for (int languageIndex = 0; languageIndex < globalHeader.Languages.Count; languageIndex++)
             {
