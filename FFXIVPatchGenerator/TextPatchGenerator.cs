@@ -210,6 +210,10 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             new Regex("^WorldPhysicalDC$", RegexOptions.IgnoreCase | RegexOptions.Compiled),
             new Regex("^WorldRegionGroup$", RegexOptions.IgnoreCase | RegexOptions.Compiled),
             new Regex("^Wks.*$", RegexOptions.IgnoreCase | RegexOptions.Compiled),
+            new Regex("^XBMItem$", RegexOptions.IgnoreCase | RegexOptions.Compiled),
+            new Regex("^XBMItemType$", RegexOptions.IgnoreCase | RegexOptions.Compiled),
+            new Regex("^XBMPet$", RegexOptions.IgnoreCase | RegexOptions.Compiled),
+            new Regex("^XBMScoreBonus$", RegexOptions.IgnoreCase | RegexOptions.Compiled),
             new Regex("^XPvP.*$", RegexOptions.IgnoreCase | RegexOptions.Compiled),
             new Regex("^YardCatalog.*$", RegexOptions.IgnoreCase | RegexOptions.Compiled),
             new Regex("^Ykw$", RegexOptions.IgnoreCase | RegexOptions.Compiled)
