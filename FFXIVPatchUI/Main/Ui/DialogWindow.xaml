@@ -21,8 +21,8 @@
     <SolidColorBrush x:Key="Panel2Bg" Color="#1A1F2B"/>
     <SolidColorBrush x:Key="BorderBrushMain" Color="#2A3140"/>
     <SolidColorBrush x:Key="TextMain" Color="#E8E6E1"/>
-    <SolidColorBrush x:Key="TextDim" Color="#9AA3B2"/>
-    <SolidColorBrush x:Key="TextFaint" Color="#626C7D"/>
+    <SolidColorBrush x:Key="TextDim" Color="#A6AFBF"/>
+    <SolidColorBrush x:Key="TextFaint" Color="#A6AFBF"/>
     <SolidColorBrush x:Key="Gold" Color="#D4AF6A"/>
 
     <Style x:Key="DlgButton" TargetType="Button">
@@ -39,6 +39,9 @@
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
                 <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource Gold}"/>
+              </Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True">
+                <Setter TargetName="Bd" Property="BorderBrush" Value="#F0D398"/>
               </Trigger>
               <Trigger Property="IsPressed" Value="True">
                 <Setter TargetName="Bd" Property="Background" Value="#12161F"/>
@@ -68,6 +71,9 @@
               <Trigger Property="IsMouseOver" Value="True">
                 <Setter TargetName="Bd" Property="Opacity" Value="0.88"/>
               </Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True">
+                <Setter TargetName="Bd" Property="BorderBrush" Value="White"/>
+              </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
         </Setter.Value>
@@ -81,7 +87,7 @@
             <ColumnDefinition Width="150"/>
             <ColumnDefinition Width="*"/>
           </Grid.ColumnDefinitions>
-          <TextBlock Text="{Binding Key}" Foreground="{StaticResource TextDim}" FontSize="12" VerticalAlignment="Top"/>
+          <TextBlock Text="{Binding Key}" Foreground="{StaticResource TextDim}" FontSize="12" VerticalAlignment="Top" TextWrapping="Wrap" Margin="0,0,12,0"/>
           <TextBlock Grid.Column="1" Text="{Binding Value}" Foreground="#D8DEE8" FontSize="12" TextWrapping="Wrap"/>
         </Grid>
       </Border>
@@ -126,6 +132,15 @@
         </DockPanel>
       </Border>
 
+      <Border DockPanel.Dock="Bottom" Background="#121620" BorderBrush="#30384A" BorderThickness="0,1,0,0" Padding="20,14">
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+          <Button x:Name="DialogSecondaryButton" AutomationProperties.AutomationId="DialogSecondaryButton"
+                  Style="{StaticResource DlgButton}" Content="취소" IsCancel="True" Visibility="Collapsed" Margin="0,0,9,0"/>
+          <Button x:Name="DialogPrimaryButton" AutomationProperties.AutomationId="DialogPrimaryButton"
+                  Style="{StaticResource DlgPrimaryButton}" Content="확인"/>
+        </StackPanel>
+      </Border>
+      <ScrollViewer x:Name="DialogScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" CanContentScroll="False">
       <StackPanel Margin="20,16,20,18">
         <TextBlock x:Name="DialogMessage" Foreground="#D8DEE8" FontSize="12.5" TextWrapping="Wrap" LineHeight="20"/>
 
@@ -155,12 +170,8 @@
                      VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,10,0"/>
         </DockPanel>
 
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
-          <Button x:Name="DialogSecondaryButton" Style="{StaticResource DlgButton}" Content="취소"
-                  Visibility="Collapsed" Margin="0,0,9,0"/>
-          <Button x:Name="DialogPrimaryButton" Style="{StaticResource DlgPrimaryButton}" Content="확인"/>
-        </StackPanel>
       </StackPanel>
+      </ScrollViewer>
     </DockPanel>
   </Border>
 </Window>

@@ -46,6 +46,16 @@ namespace FFXIVKoreanPatch.Main
             shell.LogButton = (Button)shell.Window.FindName("DialogLogButton");
             shell.PrimaryButton = (Button)shell.Window.FindName("DialogPrimaryButton");
             shell.SecondaryButton = (Button)shell.Window.FindName("DialogSecondaryButton");
+            double availableWidth = SystemParameters.WorkArea.Width - 24;
+            double availableHeight = SystemParameters.WorkArea.Height - 24;
+            if (owner != null && owner.ActualWidth > 0 && owner.ActualHeight > 0)
+            {
+                availableWidth = Math.Min(availableWidth, owner.ActualWidth - 24);
+                availableHeight = Math.Min(availableHeight, owner.ActualHeight - 16);
+            }
+            shell.Window.Width = Math.Max(1, Math.Min(620, availableWidth));
+            shell.Window.MaxHeight = Math.Max(1, availableHeight);
+            ((ScrollViewer)shell.Window.FindName("DialogScroll")).MaxHeight = Math.Max(1, availableHeight - 112);
 
             if (owner != null)
             {
@@ -129,7 +139,27 @@ namespace FFXIVKoreanPatch.Main
             shell.PrimaryButton.Content = "계속";
             shell.SecondaryButton.Content = "취소";
             shell.SecondaryButton.Visibility = Visibility.Visible;
-            shell.SecondaryButton.Focus();
+            shell.Window.Loaded += (sender, args) => shell.SecondaryButton.Focus();
+            shell.Window.ShowDialog();
+            return shell.Accepted;
+        }
+
+        public static bool ShowPatchConfirmation(
+            Window owner,
+            string title,
+            string message,
+            IList<KeyValuePair<string, string>> outcomes)
+        {
+            DialogShell shell = CreateShell(owner);
+            shell.Window.Title = title;
+            shell.Title.Text = title;
+            shell.Message.Text = message ?? string.Empty;
+            shell.Details.ItemsSource = outcomes;
+            shell.Details.Visibility = Visibility.Visible;
+            shell.PrimaryButton.Content = "패치 적용";
+            shell.SecondaryButton.Content = "취소";
+            shell.SecondaryButton.Visibility = Visibility.Visible;
+            shell.Window.Loaded += (sender, args) => shell.SecondaryButton.Focus();
             shell.Window.ShowDialog();
             return shell.Accepted;
         }

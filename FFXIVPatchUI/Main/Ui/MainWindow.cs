@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
@@ -34,8 +35,7 @@ namespace FFXIVKoreanPatch.Main
         Error
     }
 
-    // One consistent snapshot of everything the dashboard shows. Computed off
-    // the UI thread by the controller, applied on the UI thread by the view.
+    // Controller-computed snapshot, published on the UI dispatcher.
     public sealed class DashboardState
     {
         public bool ControlsEnabled;
@@ -78,12 +78,31 @@ namespace FFXIVKoreanPatch.Main
         private readonly ComboBox languageCombo;
         private readonly Button detectButton;
         private readonly Button resetButton;
-        private readonly ToggleButton chipBnpc;
-        private readonly ToggleButton chipAction;
-        private readonly ToggleButton chipCommon;
-        private readonly ToggleButton chipDuty;
-        private readonly ToggleButton chipItem;
-        private readonly ToggleButton chipPlace;
+        private readonly ToggleButton presetFull;
+        private readonly ToggleButton presetCustom;
+        private readonly TextBlock textProfileSummary;
+        private readonly ToggleButton pathsToggle;
+        private readonly StackPanel pathsPanel;
+        private readonly UniformGrid textScopeGrid;
+        private readonly StackPanel languagePanel;
+        private readonly StackPanel presetPanel;
+        private readonly Grid applyGrid;
+        private readonly StackPanel selectionSummaryPanel;
+        private readonly TextBlock selectionDetailText;
+        private readonly TextBlock settingsSaveState;
+        private readonly Border fontDependencyNote;
+        private readonly TextBlock fontDependencyText;
+        private readonly ToggleButton[] baseScopeButtons;
+        private readonly RadioButton[] koreanScopeButtons;
+        private readonly ToggleButton scopeStoryBase;
+        private readonly ToggleButton scopeBnpcBase;
+        private readonly ToggleButton scopeActionBase;
+        private readonly ToggleButton scopeDutyBase;
+        private readonly ToggleButton scopeItemBase;
+        private readonly ToggleButton scopePlaceBase;
+        private readonly ToggleButton scopeCommonBase;
+        private readonly ToggleButton scopeRemainderBase;
+        private readonly ToggleButton scopeUiAssetsBase;
         private readonly Button fullPatchButton;
         private readonly Button fontPatchButton;
         private readonly Button removeButton;
@@ -127,6 +146,13 @@ namespace FFXIVKoreanPatch.Main
         private bool progressMarqueeActive;
         private string lastPreflightLogPath = string.Empty;
         private bool suppressOptionEvents;
+        private bool closingBlocked;
+        private int displayedLanguageIndex = -1;
+        private static readonly string[] scopeNames =
+        {
+            "스토리·퀘스트 텍스트", "전투 NPC 이름", "기술 이름", "임무 이름",
+            "아이템 이름", "지역 이름", "자동 번역 상용구", "기타 게임 텍스트", "UI 이미지"
+        };
         private List<PreflightItemView> preflightAllItems = new List<PreflightItemView>();
         private List<PreflightItemView> preflightProblemItems = new List<PreflightItemView>();
 
@@ -160,12 +186,42 @@ namespace FFXIVKoreanPatch.Main
             languageCombo = Find<ComboBox>("LanguageCombo");
             detectButton = Find<Button>("DetectButton");
             resetButton = Find<Button>("ResetButton");
-            chipBnpc = Find<ToggleButton>("ChipBnpc");
-            chipAction = Find<ToggleButton>("ChipAction");
-            chipCommon = Find<ToggleButton>("ChipCommon");
-            chipDuty = Find<ToggleButton>("ChipDuty");
-            chipItem = Find<ToggleButton>("ChipItem");
-            chipPlace = Find<ToggleButton>("ChipPlace");
+            presetFull = Find<ToggleButton>("PresetFull");
+            presetCustom = Find<ToggleButton>("PresetCustom");
+            textProfileSummary = Find<TextBlock>("TextProfileSummary");
+            pathsToggle = Find<ToggleButton>("PathsToggle");
+            pathsPanel = Find<StackPanel>("PathsPanel");
+            textScopeGrid = Find<UniformGrid>("TextScopeGrid");
+            languagePanel = Find<StackPanel>("LanguagePanel");
+            presetPanel = Find<StackPanel>("PresetPanel");
+            applyGrid = Find<Grid>("ApplyGrid");
+            selectionSummaryPanel = Find<StackPanel>("SelectionSummaryPanel");
+            selectionDetailText = Find<TextBlock>("SelectionDetailText");
+            settingsSaveState = Find<TextBlock>("SettingsSaveState");
+            fontDependencyNote = Find<Border>("FontDependencyNote");
+            fontDependencyText = Find<TextBlock>("FontDependencyText");
+            scopeStoryBase = Find<ToggleButton>("ScopeStoryBase");
+            scopeBnpcBase = Find<ToggleButton>("ScopeBnpcBase");
+            scopeActionBase = Find<ToggleButton>("ScopeActionBase");
+            scopeDutyBase = Find<ToggleButton>("ScopeDutyBase");
+            scopeItemBase = Find<ToggleButton>("ScopeItemBase");
+            scopePlaceBase = Find<ToggleButton>("ScopePlaceBase");
+            scopeCommonBase = Find<ToggleButton>("ScopeCommonBase");
+            scopeRemainderBase = Find<ToggleButton>("ScopeRemainderBase");
+            scopeUiAssetsBase = Find<ToggleButton>("ScopeUiAssetsBase");
+            baseScopeButtons = new ToggleButton[]
+            {
+                scopeStoryBase, scopeBnpcBase, scopeActionBase, scopeDutyBase, scopeItemBase,
+                scopePlaceBase, scopeCommonBase, scopeRemainderBase, scopeUiAssetsBase
+            };
+            koreanScopeButtons = new RadioButton[]
+            {
+                Find<RadioButton>("ScopeStoryKo"), Find<RadioButton>("ScopeBnpcKo"),
+                Find<RadioButton>("ScopeActionKo"), Find<RadioButton>("ScopeDutyKo"),
+                Find<RadioButton>("ScopeItemKo"), Find<RadioButton>("ScopePlaceKo"),
+                Find<RadioButton>("ScopeCommonKo"), Find<RadioButton>("ScopeRemainderKo"),
+                Find<RadioButton>("ScopeUiAssetsKo")
+            };
             fullPatchButton = Find<Button>("FullPatchButton");
             fontPatchButton = Find<Button>("FontPatchButton");
             removeButton = Find<Button>("RemoveButton");
@@ -200,8 +256,14 @@ namespace FFXIVKoreanPatch.Main
             InitializeChrome();
             InitializeStaticContent();
 
-            // SizeToContent grows with the checklist; never outgrow the screen.
-            window.MaxHeight = Math.Max(560, SystemParameters.WorkArea.Height - 24);
+            // Only the body scrolls; primary actions stay within the work area.
+            window.MaxHeight = Math.Max(1, SystemParameters.WorkArea.Height - 24);
+            window.Height = Math.Min(940, window.MaxHeight);
+            window.MaxWidth = Math.Max(1, SystemParameters.WorkArea.Width - 24);
+            window.Width = Math.Min(780, window.MaxWidth);
+            window.SizeChanged += (sender, args) => UpdateResponsiveLayout();
+            UpdateResponsiveLayout();
+            ApplyDashboard(new DashboardState { ControlsEnabled = true, State = ClientPatchState.NoClient });
         }
 
         public Window Window
@@ -259,11 +321,21 @@ namespace FFXIVKoreanPatch.Main
             };
             minButton.Click += (sender, args) => window.WindowState = WindowState.Minimized;
             closeButton.Click += (sender, args) => window.Close();
+            window.Closing += (sender, args) =>
+            {
+                if (closingBlocked)
+                {
+                    args.Cancel = true;
+                    SetStatus("작업이 끝난 뒤 창을 닫을 수 있습니다.", false);
+                }
+            };
 
             preflightToggle.Checked += (sender, args) => preflightPanel.Visibility = Visibility.Visible;
             preflightToggle.Unchecked += (sender, args) => preflightPanel.Visibility = Visibility.Collapsed;
             advancedToggle.Checked += (sender, args) => advancedPanel.Visibility = Visibility.Visible;
             advancedToggle.Unchecked += (sender, args) => advancedPanel.Visibility = Visibility.Collapsed;
+            pathsToggle.Checked += (sender, args) => pathsPanel.Visibility = Visibility.Visible;
+            pathsToggle.Unchecked += (sender, args) => pathsPanel.Visibility = Visibility.Collapsed;
 
             preflightLogButton.Click += (sender, args) => OpenFileInShell(lastPreflightLogPath);
             preflightShowAllToggle.Checked += (sender, args) => RefreshPreflightListSource();
@@ -275,6 +347,31 @@ namespace FFXIVKoreanPatch.Main
                     ApplyProgressWidth();
                 }
             };
+        }
+
+        private void UpdateResponsiveLayout()
+        {
+            double width = window.ActualWidth > 0 ? window.ActualWidth : window.Width;
+            bool narrow = width < 700;
+            textScopeGrid.Columns = narrow ? 1 : 2;
+            Grid.SetColumnSpan(languagePanel, narrow ? 2 : 1);
+            Grid.SetRow(presetPanel, narrow ? 1 : 0);
+            Grid.SetColumn(presetPanel, narrow ? 0 : 1);
+            Grid.SetColumnSpan(presetPanel, narrow ? 2 : 1);
+            presetPanel.HorizontalAlignment = narrow ? HorizontalAlignment.Left : HorizontalAlignment.Right;
+            presetPanel.Margin = narrow ? new Thickness(0, 9, 0, 0) : new Thickness(0);
+
+            bool stackAction = width < 640;
+            applyGrid.ColumnDefinitions[1].Width = new GridLength(stackAction ? 0 : 194);
+            Grid.SetColumnSpan(selectionSummaryPanel, stackAction ? 2 : 1);
+            Grid.SetRow(fullPatchButton, stackAction ? 1 : 0);
+            Grid.SetColumn(fullPatchButton, stackAction ? 0 : 1);
+            Grid.SetColumnSpan(fullPatchButton, stackAction ? 2 : 1);
+            Grid.SetRow(testPatchButton, stackAction ? 1 : 0);
+            Grid.SetColumn(testPatchButton, stackAction ? 0 : 1);
+            Grid.SetColumnSpan(testPatchButton, stackAction ? 2 : 1);
+            fullPatchButton.Margin = stackAction ? new Thickness(0, 9, 0, 0) : new Thickness(0);
+            testPatchButton.Margin = fullPatchButton.Margin;
         }
 
         private void InitializeStaticContent()
@@ -292,12 +389,18 @@ namespace FFXIVKoreanPatch.Main
 
 #if TEST_BUILD
             window.Title = "FFXIV 한글 패치 - 테스트 빌드";
-            modeBadge.Visibility = Visibility.Visible;
-            fontProfileRow.Visibility = Visibility.Visible;
-            testPatchButton.Visibility = Visibility.Visible;
-            fullPatchButton.Visibility = Visibility.Collapsed;
-            fontPatchButton.Visibility = Visibility.Collapsed;
-            removeButton.Visibility = Visibility.Collapsed;
+            if (!string.Equals(
+                Environment.GetEnvironmentVariable("FFXIV_PATCH_UI_SMOKE"),
+                "1",
+                StringComparison.Ordinal))
+            {
+                modeBadge.Visibility = Visibility.Visible;
+                fontProfileRow.Visibility = Visibility.Visible;
+                testPatchButton.Visibility = Visibility.Visible;
+                fullPatchButton.Visibility = Visibility.Collapsed;
+                fontPatchButton.Visibility = Visibility.Collapsed;
+                removeButton.Visibility = Visibility.Collapsed;
+            }
 #endif
         }
 
@@ -307,15 +410,7 @@ namespace FFXIVKoreanPatch.Main
         {
             controller = patchController;
 
-            suppressOptionEvents = true;
-            languageCombo.SelectedIndex = controller.TargetLanguageIndex;
-            chipBnpc.IsChecked = controller.PreserveBaseBnpcNames;
-            chipAction.IsChecked = controller.PreserveBaseActionNames;
-            chipCommon.IsChecked = controller.PreserveBaseCommonPhrases;
-            chipDuty.IsChecked = controller.PreserveBaseDutyNames;
-            chipItem.IsChecked = controller.PreserveBaseItemNames;
-            chipPlace.IsChecked = controller.PreserveBasePlaceNames;
-            suppressOptionEvents = false;
+            SynchronizeTextConfiguration();
 
             globalBrowseButton.Click += (sender, args) => controller.BrowseGlobalPath();
             koreaBrowseButton.Click += (sender, args) => controller.BrowseKoreaPath();
@@ -326,34 +421,35 @@ namespace FFXIVKoreanPatch.Main
                 if (!suppressOptionEvents)
                 {
                     controller.SetTargetLanguage(languageCombo.SelectedIndex);
+                    SynchronizeTextConfiguration();
                 }
             };
 
-            RoutedEventHandler chipHandler = (sender, args) =>
+            RoutedEventHandler fullPresetHandler = (sender, args) =>
+            {
+                if (!suppressOptionEvents) ApplyTextPreset("full");
+            };
+            RoutedEventHandler customPresetHandler = (sender, args) =>
+            {
+                if (!suppressOptionEvents) ApplyTextPreset("custom");
+            };
+            presetFull.Checked += fullPresetHandler;
+            presetCustom.Checked += customPresetHandler;
+
+            RoutedEventHandler scopeHandler = (sender, args) =>
             {
                 if (!suppressOptionEvents)
                 {
-                    controller.SetPreserveOptions(
-                        chipBnpc.IsChecked == true,
-                        chipAction.IsChecked == true,
-                        chipCommon.IsChecked == true,
-                        chipDuty.IsChecked == true,
-                        chipItem.IsChecked == true,
-                        chipPlace.IsChecked == true);
+                    // Only Checked is observed: a radio group briefly has no selection
+                    // while it unchecks the old member, before checking the new one.
+                    PersistTextConfiguration("custom");
                 }
             };
-            chipBnpc.Checked += chipHandler;
-            chipBnpc.Unchecked += chipHandler;
-            chipAction.Checked += chipHandler;
-            chipAction.Unchecked += chipHandler;
-            chipCommon.Checked += chipHandler;
-            chipCommon.Unchecked += chipHandler;
-            chipDuty.Checked += chipHandler;
-            chipDuty.Unchecked += chipHandler;
-            chipItem.Checked += chipHandler;
-            chipItem.Unchecked += chipHandler;
-            chipPlace.Checked += chipHandler;
-            chipPlace.Unchecked += chipHandler;
+            for (int i = 0; i < baseScopeButtons.Length; i++)
+            {
+                baseScopeButtons[i].Checked += scopeHandler;
+                koreanScopeButtons[i].Checked += scopeHandler;
+            }
 
             fullPatchButton.Click += (sender, args) => controller.RequestFullPatch();
             fontPatchButton.Click += (sender, args) => controller.RequestFontPatch();
@@ -373,12 +469,136 @@ namespace FFXIVKoreanPatch.Main
 
             window.Loaded += (sender, args) =>
             {
-                if (!startRequested)
+                if (startRequested)
                 {
-                    startRequested = true;
-                    controller.Start();
+                    return;
                 }
+
+                startRequested = true;
+#if TEST_BUILD
+                if (string.Equals(
+                    Environment.GetEnvironmentVariable("FFXIV_PATCH_UI_SMOKE"),
+                    "1",
+                    StringComparison.Ordinal))
+                {
+                    return;
+                }
+#endif
+                controller.Start();
             };
+        }
+
+        private void ApplyTextPreset(string profile)
+        {
+            controller.SelectTextProfile(profile);
+            SynchronizeTextConfiguration();
+        }
+
+        private void SynchronizeTextConfiguration()
+        {
+            bool previousSuppression = suppressOptionEvents;
+            suppressOptionEvents = true;
+            languageCombo.SelectedIndex = controller.TargetLanguageIndex;
+            SetScopeOutcomes(
+                controller.PreserveBaseStoryText,
+                controller.PreserveBaseBnpcNames,
+                controller.PreserveBaseActionNames,
+                controller.PreserveBaseDutyNames,
+                controller.PreserveBaseItemNames,
+                controller.PreserveBasePlaceNames,
+                controller.PreserveBaseCommonPhrases,
+                controller.PreserveBaseRemainderText,
+                controller.PreserveBaseUiAssets);
+            SetTextProfileVisuals(controller.TextProfile);
+            suppressOptionEvents = previousSuppression;
+        }
+
+        private void SetScopeOutcomes(
+            bool story,
+            bool bnpc,
+            bool actions,
+            bool duty,
+            bool item,
+            bool place,
+            bool common,
+            bool remainder,
+            bool uiAssets)
+        {
+            scopeStoryBase.IsChecked = story;
+            scopeBnpcBase.IsChecked = bnpc;
+            scopeActionBase.IsChecked = actions;
+            scopeDutyBase.IsChecked = duty;
+            scopeItemBase.IsChecked = item;
+            scopePlaceBase.IsChecked = place;
+            scopeCommonBase.IsChecked = common;
+            scopeRemainderBase.IsChecked = remainder;
+            scopeUiAssetsBase.IsChecked = uiAssets;
+            for (int i = 0; i < baseScopeButtons.Length; i++)
+            {
+                koreanScopeButtons[i].IsChecked = baseScopeButtons[i].IsChecked != true;
+            }
+            UpdateScopeOutcomeLabels();
+        }
+
+        private void SetTextProfileVisuals(string profile)
+        {
+            bool isCustom = string.Equals(profile, "custom", StringComparison.Ordinal);
+            bool previousSuppression = suppressOptionEvents;
+            suppressOptionEvents = true;
+            presetFull.IsChecked = !isCustom;
+            presetCustom.IsChecked = isCustom;
+            suppressOptionEvents = previousSuppression;
+            UpdateScopeOutcomeLabels();
+
+            int baseCount = CountBaseCompositionOutcomes();
+            string baseLanguage = languageCombo.SelectedIndex == 1 ? "영어" : "일본어";
+            textProfileSummary.Text = "한국어 " + (9 - baseCount) + "개 · " + baseLanguage + " " + baseCount + "개";
+            selectionDetailText.Text = baseLanguage + " 클라이언트 기준 · 한글 폰트 포함";
+            fullPatchButton.Tag = "선택한 텍스트·UI 이미지 구성과 한글 폰트를 적용합니다";
+            bool needsSeparateFontRepair = scopeRemainderBase.IsChecked != true && scopeUiAssetsBase.IsChecked == true;
+            fontDependencyNote.Visibility = needsSeparateFontRepair ? Visibility.Visible : Visibility.Collapsed;
+            fontDependencyText.Text = "UI 이미지는 " + baseLanguage + "로 유지합니다. 한국어 UI 글자 표시를 위한 폰트·레이아웃 보정은 별도로 포함됩니다.";
+        }
+
+        private int CountBaseCompositionOutcomes()
+        {
+            int count = 0;
+            foreach (ToggleButton button in baseScopeButtons)
+            {
+                if (button.IsChecked == true) count++;
+            }
+            return count;
+        }
+
+        private void UpdateScopeOutcomeLabels()
+        {
+            int index = languageCombo.SelectedIndex;
+            if (displayedLanguageIndex == index) return;
+            displayedLanguageIndex = index;
+            string baseLanguage = index == 1 ? "영어" : "일본어";
+            for (int i = 0; i < baseScopeButtons.Length; i++)
+            {
+                baseScopeButtons[i].Content = baseLanguage;
+                AutomationProperties.SetName(baseScopeButtons[i], scopeNames[i] + ": " + baseLanguage);
+                AutomationProperties.SetName(koreanScopeButtons[i], scopeNames[i] + ": 한국어");
+            }
+        }
+
+
+        private void PersistTextConfiguration(string profile)
+        {
+            controller.SetTextConfiguration(
+                profile,
+                scopeStoryBase.IsChecked == true,
+                scopeBnpcBase.IsChecked == true,
+                scopeActionBase.IsChecked == true,
+                scopeDutyBase.IsChecked == true,
+                scopeItemBase.IsChecked == true,
+                scopePlaceBase.IsChecked == true,
+                scopeCommonBase.IsChecked == true,
+                scopeRemainderBase.IsChecked == true,
+                scopeUiAssetsBase.IsChecked == true);
+            SynchronizeTextConfiguration();
         }
 
         public void RunOnUi(Action action)
@@ -501,17 +721,21 @@ namespace FFXIVKoreanPatch.Main
         {
             RunOnUi(() =>
             {
+                closingBlocked = !state.ControlsEnabled;
+                closeButton.IsEnabled = state.ControlsEnabled;
+                closeButton.ToolTip = closingBlocked ? "작업이 끝난 뒤 닫을 수 있습니다." : "창 닫기";
                 globalBrowseButton.IsEnabled = state.ControlsEnabled;
                 koreaBrowseButton.IsEnabled = state.ControlsEnabled;
                 languageCombo.IsEnabled = state.ControlsEnabled;
                 detectButton.IsEnabled = state.ControlsEnabled;
                 resetButton.IsEnabled = state.ControlsEnabled;
-                chipBnpc.IsEnabled = state.ControlsEnabled;
-                chipAction.IsEnabled = state.ControlsEnabled;
-                chipCommon.IsEnabled = state.ControlsEnabled;
-                chipDuty.IsEnabled = state.ControlsEnabled;
-                chipItem.IsEnabled = state.ControlsEnabled;
-                chipPlace.IsEnabled = state.ControlsEnabled;
+                presetFull.IsEnabled = state.ControlsEnabled;
+                presetCustom.IsEnabled = state.ControlsEnabled;
+                for (int i = 0; i < baseScopeButtons.Length; i++)
+                {
+                    baseScopeButtons[i].IsEnabled = state.ControlsEnabled;
+                    koreanScopeButtons[i].IsEnabled = state.ControlsEnabled;
+                }
                 restoreBackupButton.IsEnabled = state.ControlsEnabled;
                 openReleaseButton.IsEnabled = state.ControlsEnabled;
                 openLogsButton.IsEnabled = state.ControlsEnabled;
@@ -549,7 +773,7 @@ namespace FFXIVKoreanPatch.Main
                     brush = dotGreen;
                     break;
                 case ClientPatchState.Full:
-                    text = "전체 한글 패치 적용됨";
+                    text = "텍스트·폰트 패치 적용됨";
                     brush = dotGold;
                     break;
                 case ClientPatchState.FontOnly:
@@ -674,6 +898,11 @@ namespace FFXIVKoreanPatch.Main
         public bool ShowConfirm(string title, params string[] lines)
         {
             return RunOnUi(() => Dialogs.ShowConfirm(GetDialogOwner(), title, JoinLines(lines)));
+        }
+
+        public bool ShowPatchConfirmation(string title, string message, IList<KeyValuePair<string, string>> outcomes)
+        {
+            return RunOnUi(() => Dialogs.ShowPatchConfirmation(GetDialogOwner(), title, message, outcomes));
         }
 
         public void ShowOperationResult(string title, string summary, string logPath, IList<KeyValuePair<string, string>> details)

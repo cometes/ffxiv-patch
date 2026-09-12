@@ -141,15 +141,19 @@ namespace FFXIVKoreanPatch.Main
         // Global EXD language suffix to rewrite. Default is ja because the primary target is Japanese client.
         private string targetLanguageCode = "ja";
         private string targetLanguageDisplayName = "일본어";
-        private bool preserveBaseStoryText = false;
+        private string textProfile = "full";
+        private bool preserveBaseStoryText;
         private bool preserveBaseBnpcNames;
         private bool preserveBaseActionNames;
         private bool preserveBaseCommonPhrases;
         private bool preserveBaseDutyNames;
         private bool preserveBaseItemNames;
         private bool preserveBasePlaceNames;
-        private bool preserveBaseRemainderText = false;
-        private bool preserveBaseUiAssets = false;
+        private bool preserveBaseRemainderText;
+        private bool preserveBaseUiAssets;
+        private static readonly string[] outcomeSettingKeys =
+            { "story", "bnpc", "actions", "duty", "item", "place", "common", "remainder", "uiAssets" };
+        private bool[] customDraft = new bool[9];
 
         // Output directory used when generating release files locally.
         private string releaseOutputDir = string.Empty;
@@ -165,9 +169,13 @@ namespace FFXIVKoreanPatch.Main
         private bool lastPreflightPassed;
         private string fontPatchProfile = "full";
         private bool preflightHasRun;
-        private bool preflightBusy;
-        private bool buildBusy;
-        private bool removeBusy;
+        private volatile bool initialCheckBusy;
+        private volatile bool preflightBusy;
+        private volatile bool buildBusy;
+#if !TEST_BUILD
+        private volatile bool restoreBusy;
+        private volatile bool removeBusy;
+#endif
 
         // Target client version.
         private string targetVersion = string.Empty;
@@ -179,12 +187,23 @@ namespace FFXIVKoreanPatch.Main
         public PatchController(MainWindow view)
         {
             this.view = view;
-            LoadBaseLanguageNameOptionSettings();
+            LoadTextConfigurationSettings();
+            customDraft = GetScopeOutcomes();
         }
 
         public int TargetLanguageIndex
         {
             get { return targetLanguageCode == "en" ? 1 : 0; }
+        }
+
+        public string TextProfile
+        {
+            get { return textProfile; }
+        }
+
+        public bool PreserveBaseStoryText
+        {
+            get { return preserveBaseStoryText; }
         }
 
         public bool PreserveBaseBnpcNames
@@ -217,9 +236,34 @@ namespace FFXIVKoreanPatch.Main
             get { return preserveBasePlaceNames; }
         }
 
+        public bool PreserveBaseRemainderText
+        {
+            get { return preserveBaseRemainderText; }
+        }
+
+        public bool PreserveBaseUiAssets
+        {
+            get { return preserveBaseUiAssets; }
+        }
+
+        private bool IsWorkActive
+        {
+            get
+            {
+                return initialCheckBusy || preflightBusy || buildBusy
+#if !TEST_BUILD
+                    || restoreBusy || removeBusy
+#endif
+                    ;
+            }
+        }
+
         // Called once by the view after the main window is loaded.
         public void Start()
         {
+            if (IsWorkActive) return;
+            initialCheckBusy = true;
+            SetActionButtonsEnabled(false);
             RunBackground(InitialCheckWork);
         }
 
@@ -265,7 +309,13 @@ namespace FFXIVKoreanPatch.Main
 
         private void CloseForm()
         {
-            view.CloseView();
+            // Only initialization calls this path; release its closing guard before exiting.
+            view.RunOnUi(() =>
+            {
+                initialCheckBusy = false;
+                view.ApplyDashboard(new DashboardState { ControlsEnabled = !IsWorkActive });
+                view.CloseView();
+            });
         }
 
         #endregion
@@ -608,6 +658,14 @@ namespace FFXIVKoreanPatch.Main
 
         private void SetActionButtonsEnabled(bool enabled)
         {
+            // Compute and publish the busy gate on the UI thread so an older completion
+            // cannot enqueue an enabled dashboard after a newer operation starts.
+            if (!view.Window.Dispatcher.CheckAccess())
+            {
+                view.RunOnUi(() => SetActionButtonsEnabled(enabled));
+                return;
+            }
+            enabled = enabled && !IsWorkActive;
             bool hasGlobalClient = HasValidGlobalClient();
             bool hasKoreaClient = HasValidKoreaClient();
             string[] fullPatchSelection = GetPatchFilesForSelection(true, true);
@@ -674,12 +732,12 @@ namespace FFXIVKoreanPatch.Main
 
             if (!hasKoreaClient)
             {
-                return "한국 서버 클라이언트 경로가 설정되지 않았습니다. '변경' 또는 '자동 탐색'으로 지정해주세요. 한글 원문은 한국 서버 클라이언트에서 읽어옵니다.";
+                return "한국 서버 클라이언트 경로가 설정되지 않았습니다. '경로 확인'을 열어 '변경' 또는 '자동 탐색'으로 지정해주세요. 한글 원문은 한국 서버 클라이언트에서 읽어옵니다.";
             }
 
             if (preflightHasRun && !lastPreflightPassed)
             {
-                return "사전 점검에서 실패한 항목이 있어 패치 버튼을 잠갔습니다. 아래 점검 카드에서 실패 항목을 해결한 뒤 '다시 점검'을 눌러주세요.";
+                return "사전 점검에서 실패한 항목이 있어 패치 버튼을 잠갔습니다. 사전 점검 카드에서 실패 항목을 해결한 뒤 '다시 점검'을 눌러주세요.";
             }
 
             if (lastPreflightPassed && !canFull && !fullHasCleanBase)
@@ -792,6 +850,15 @@ namespace FFXIVKoreanPatch.Main
 
         private string GetRuntimeDataRootDir()
         {
+#if TEST_BUILD
+            string testDataRoot = Environment.GetEnvironmentVariable("FFXIV_PATCH_TEST_DATA_ROOT");
+            if (!string.IsNullOrWhiteSpace(testDataRoot))
+            {
+                Directory.CreateDirectory(testDataRoot);
+                return testDataRoot;
+            }
+#endif
+
             string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
             string rootDir = string.IsNullOrEmpty(localAppData)
                 ? Path.Combine(LegacyPaths.CommonAppDataPath, "runtime-data")
@@ -813,14 +880,26 @@ namespace FFXIVKoreanPatch.Main
             return Path.Combine(GetRuntimeDataRootDir(), "patch-options.txt");
         }
 
-        private void LoadBaseLanguageNameOptionSettings()
+        private void LoadTextConfigurationSettings()
         {
-            bool bnpc = false;
-            bool actions = false;
-            bool commonPhrases = false;
-            bool dutyNames = false;
-            bool itemNames = false;
-            bool placeNames = false;
+            string loadedProfile = null;
+            bool hasNewScopeOutcomes = false;
+            bool legacyBnpc = false;
+            bool legacyActions = false;
+            bool legacyCommon = false;
+            bool legacyDuty = false;
+            bool legacyItem = false;
+            bool legacyPlace = false;
+            bool? story = null;
+            bool? bnpc = null;
+            bool? actions = null;
+            bool? duty = null;
+            bool? item = null;
+            bool? place = null;
+            bool? common = null;
+            bool? remainder = null;
+            bool? uiAssets = null;
+
             string path = GetPatchOptionSettingsPath();
             if (File.Exists(path))
             {
@@ -840,68 +919,283 @@ namespace FFXIVKoreanPatch.Main
 
                     string key = trimmed.Substring(0, equals).Trim();
                     string value = trimmed.Substring(equals + 1).Trim();
-                    bool enabled = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) ||
-                                   string.Equals(value, "1", StringComparison.OrdinalIgnoreCase) ||
-                                   string.Equals(value, "yes", StringComparison.OrdinalIgnoreCase);
-                    if (string.Equals(key, "preserveBaseBnpcNames", StringComparison.OrdinalIgnoreCase))
+                    bool parsedOutcome;
+                    if (string.Equals(key, "textProfile", StringComparison.OrdinalIgnoreCase))
                     {
-                        bnpc = enabled;
+                        loadedProfile = value;
                     }
-                    else if (string.Equals(key, "preserveBaseActionNames", StringComparison.OrdinalIgnoreCase))
+                    else if (string.Equals(key, "story", StringComparison.OrdinalIgnoreCase) &&
+                             TryParseScopeOutcome(value, out parsedOutcome))
                     {
-                        actions = enabled;
+                        story = parsedOutcome;
+                        hasNewScopeOutcomes = true;
                     }
-                    else if (string.Equals(key, "preserveBaseCommonPhrases", StringComparison.OrdinalIgnoreCase))
+                    else if (string.Equals(key, "bnpc", StringComparison.OrdinalIgnoreCase) &&
+                             TryParseScopeOutcome(value, out parsedOutcome))
                     {
-                        commonPhrases = enabled;
+                        bnpc = parsedOutcome;
+                        hasNewScopeOutcomes = true;
                     }
-                    else if (string.Equals(key, "preserveBaseDutyNames", StringComparison.OrdinalIgnoreCase))
+                    else if (string.Equals(key, "actions", StringComparison.OrdinalIgnoreCase) &&
+                             TryParseScopeOutcome(value, out parsedOutcome))
                     {
-                        dutyNames = enabled;
+                        actions = parsedOutcome;
+                        hasNewScopeOutcomes = true;
                     }
-                    else if (string.Equals(key, "preserveBaseItemNames", StringComparison.OrdinalIgnoreCase))
+                    else if (string.Equals(key, "duty", StringComparison.OrdinalIgnoreCase) &&
+                             TryParseScopeOutcome(value, out parsedOutcome))
                     {
-                        itemNames = enabled;
+                        duty = parsedOutcome;
+                        hasNewScopeOutcomes = true;
                     }
-                    else if (string.Equals(key, "preserveBasePlaceNames", StringComparison.OrdinalIgnoreCase))
+                    else if (string.Equals(key, "item", StringComparison.OrdinalIgnoreCase) &&
+                             TryParseScopeOutcome(value, out parsedOutcome))
                     {
-                        placeNames = enabled;
+                        item = parsedOutcome;
+                        hasNewScopeOutcomes = true;
+                    }
+                    else if (string.Equals(key, "place", StringComparison.OrdinalIgnoreCase) &&
+                             TryParseScopeOutcome(value, out parsedOutcome))
+                    {
+                        place = parsedOutcome;
+                        hasNewScopeOutcomes = true;
+                    }
+                    else if (string.Equals(key, "common", StringComparison.OrdinalIgnoreCase) &&
+                             TryParseScopeOutcome(value, out parsedOutcome))
+                    {
+                        common = parsedOutcome;
+                        hasNewScopeOutcomes = true;
+                    }
+                    else if (string.Equals(key, "remainder", StringComparison.OrdinalIgnoreCase) &&
+                             TryParseScopeOutcome(value, out parsedOutcome))
+                    {
+                        remainder = parsedOutcome;
+                        hasNewScopeOutcomes = true;
+                    }
+                    else if (string.Equals(key, "uiAssets", StringComparison.OrdinalIgnoreCase) &&
+                             TryParseScopeOutcome(value, out parsedOutcome))
+                    {
+                        uiAssets = parsedOutcome;
+                        hasNewScopeOutcomes = true;
+                    }
+                    else
+                    {
+                        bool enabled = IsEnabledSettingValue(value);
+                        if (string.Equals(key, "preserveBaseBnpcNames", StringComparison.OrdinalIgnoreCase))
+                        {
+                            legacyBnpc = enabled;
+                        }
+                        else if (string.Equals(key, "preserveBaseActionNames", StringComparison.OrdinalIgnoreCase))
+                        {
+                            legacyActions = enabled;
+                        }
+                        else if (string.Equals(key, "preserveBaseCommonPhrases", StringComparison.OrdinalIgnoreCase))
+                        {
+                            legacyCommon = enabled;
+                        }
+                        else if (string.Equals(key, "preserveBaseDutyNames", StringComparison.OrdinalIgnoreCase))
+                        {
+                            legacyDuty = enabled;
+                        }
+                        else if (string.Equals(key, "preserveBaseItemNames", StringComparison.OrdinalIgnoreCase))
+                        {
+                            legacyItem = enabled;
+                        }
+                        else if (string.Equals(key, "preserveBasePlaceNames", StringComparison.OrdinalIgnoreCase))
+                        {
+                            legacyPlace = enabled;
+                        }
                     }
                 }
             }
 
-            preserveBaseBnpcNames = bnpc;
-            preserveBaseActionNames = actions;
-            preserveBaseCommonPhrases = commonPhrases;
-            preserveBaseDutyNames = dutyNames;
-            preserveBaseItemNames = itemNames;
-            preserveBasePlaceNames = placeNames;
+            bool migrateStoryProfileToCustom =
+                string.Equals(loadedProfile, "story", StringComparison.OrdinalIgnoreCase);
+
+            if (loadedProfile == null)
+            {
+                bool anyLegacyPreserve = legacyBnpc || legacyActions || legacyCommon ||
+                                         legacyDuty || legacyItem || legacyPlace;
+                textProfile = hasNewScopeOutcomes || anyLegacyPreserve ? "custom" : "full";
+            }
+            else
+            {
+                textProfile = migrateStoryProfileToCustom ? "custom" : NormalizeTextProfile(loadedProfile);
+            }
+
+            preserveBaseStoryText = story ?? false;
+            preserveBaseBnpcNames = bnpc ?? legacyBnpc;
+            preserveBaseActionNames = actions ?? legacyActions;
+            preserveBaseCommonPhrases = common ?? legacyCommon;
+            preserveBaseDutyNames = duty ?? legacyDuty;
+            preserveBaseItemNames = item ?? legacyItem;
+            preserveBasePlaceNames = place ?? legacyPlace;
+            preserveBaseRemainderText = remainder ?? false;
+            preserveBaseUiAssets = uiAssets ?? false;
+
+            if (migrateStoryProfileToCustom)
+            {
+                ApplyStoryTextProfileDefaults();
+            }
+            else if (!string.Equals(textProfile, "custom", StringComparison.Ordinal))
+            {
+                ApplyFullTextProfileDefaults();
+            }
         }
 
-        private void SaveBaseLanguageNameOptionSettings()
+        private bool[] GetScopeOutcomes()
+        {
+            return new[]
+            {
+                preserveBaseStoryText, preserveBaseBnpcNames, preserveBaseActionNames,
+                preserveBaseDutyNames, preserveBaseItemNames, preserveBasePlaceNames,
+                preserveBaseCommonPhrases, preserveBaseRemainderText, preserveBaseUiAssets
+            };
+        }
+
+        private void ApplyScopeOutcomes(bool[] outcomes)
+        {
+            preserveBaseStoryText = outcomes[0];
+            preserveBaseBnpcNames = outcomes[1];
+            preserveBaseActionNames = outcomes[2];
+            preserveBaseDutyNames = outcomes[3];
+            preserveBaseItemNames = outcomes[4];
+            preserveBasePlaceNames = outcomes[5];
+            preserveBaseCommonPhrases = outcomes[6];
+            preserveBaseRemainderText = outcomes[7];
+            preserveBaseUiAssets = outcomes[8];
+        }
+
+        private static bool IsEnabledSettingValue(string value)
+        {
+            return string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(value, "1", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(value, "yes", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool TryParseScopeOutcome(string value, out bool preserveBase)
+        {
+            if (string.Equals(value, "base", StringComparison.OrdinalIgnoreCase))
+            {
+                preserveBase = true;
+                return true;
+            }
+
+            if (string.Equals(value, "ko", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(value, "korean", StringComparison.OrdinalIgnoreCase))
+            {
+                preserveBase = false;
+                return true;
+            }
+
+            preserveBase = false;
+            return false;
+        }
+
+        private static string NormalizeTextProfile(string profile)
+        {
+            return string.Equals(profile, "custom", StringComparison.OrdinalIgnoreCase)
+                ? "custom"
+                : "full";
+        }
+
+        private void ApplyFullTextProfileDefaults()
+        {
+            preserveBaseStoryText = false;
+            preserveBaseBnpcNames = false;
+            preserveBaseActionNames = false;
+            preserveBaseCommonPhrases = false;
+            preserveBaseDutyNames = false;
+            preserveBaseItemNames = false;
+            preserveBasePlaceNames = false;
+            preserveBaseRemainderText = false;
+            preserveBaseUiAssets = false;
+        }
+
+        private void ApplyStoryTextProfileDefaults()
+        {
+            preserveBaseStoryText = false;
+            preserveBaseBnpcNames = true;
+            preserveBaseActionNames = true;
+            preserveBaseCommonPhrases = true;
+            preserveBaseDutyNames = true;
+            preserveBaseItemNames = true;
+            preserveBasePlaceNames = true;
+            preserveBaseRemainderText = true;
+            preserveBaseUiAssets = true;
+        }
+
+        private void SaveTextConfigurationSettings()
         {
             string path = GetPatchOptionSettingsPath();
             string[] lines = new string[]
             {
-                "preserveBaseBnpcNames=" + (preserveBaseBnpcNames ? "true" : "false"),
-                "preserveBaseActionNames=" + (preserveBaseActionNames ? "true" : "false"),
-                "preserveBaseCommonPhrases=" + (preserveBaseCommonPhrases ? "true" : "false"),
-                "preserveBaseDutyNames=" + (preserveBaseDutyNames ? "true" : "false"),
-                "preserveBaseItemNames=" + (preserveBaseItemNames ? "true" : "false"),
-                "preserveBasePlaceNames=" + (preserveBasePlaceNames ? "true" : "false")
+                "textProfile=" + textProfile,
+                "story=" + FormatScopeOutcome(preserveBaseStoryText),
+                "bnpc=" + FormatScopeOutcome(preserveBaseBnpcNames),
+                "actions=" + FormatScopeOutcome(preserveBaseActionNames),
+                "duty=" + FormatScopeOutcome(preserveBaseDutyNames),
+                "item=" + FormatScopeOutcome(preserveBaseItemNames),
+                "place=" + FormatScopeOutcome(preserveBasePlaceNames),
+                "common=" + FormatScopeOutcome(preserveBaseCommonPhrases),
+                "remainder=" + FormatScopeOutcome(preserveBaseRemainderText),
+                "uiAssets=" + FormatScopeOutcome(preserveBaseUiAssets)
             };
             File.WriteAllLines(path, lines, Encoding.UTF8);
         }
 
-
-        private string FormatBaseLanguageNameOptionSummary()
+        private static string FormatScopeOutcome(bool preserveBase)
         {
-            return "BNpcName=" + (preserveBaseBnpcNames ? "preserve" : "korean") +
-                   ", Actions=" + (preserveBaseActionNames ? "preserve" : "korean") +
-                   ", CommonPhrases=" + (preserveBaseCommonPhrases ? "preserve" : "korean") +
-                   ", DutyNames=" + (preserveBaseDutyNames ? "preserve" : "korean") +
-                   ", ItemNames=" + (preserveBaseItemNames ? "preserve" : "korean") +
-                   ", PlaceNames=" + (preserveBasePlaceNames ? "preserve" : "korean");
+            return preserveBase ? "base" : "ko";
+        }
+
+        private string GetTextScopeOutcomesArgument()
+        {
+            return "story=" + FormatScopeOutcome(preserveBaseStoryText) +
+                   ",bnpc=" + FormatScopeOutcome(preserveBaseBnpcNames) +
+                   ",actions=" + FormatScopeOutcome(preserveBaseActionNames) +
+                   ",duty=" + FormatScopeOutcome(preserveBaseDutyNames) +
+                   ",item=" + FormatScopeOutcome(preserveBaseItemNames) +
+                   ",place=" + FormatScopeOutcome(preserveBasePlaceNames) +
+                   ",common=" + FormatScopeOutcome(preserveBaseCommonPhrases) +
+                   ",remainder=" + FormatScopeOutcome(preserveBaseRemainderText);
+        }
+
+        private string GetTextConfigurationGeneratorArguments()
+        {
+            string arguments = " --text-profile " + textProfile;
+            if (string.Equals(textProfile, "custom", StringComparison.Ordinal))
+            {
+                arguments += " --text-scope-outcomes " + QuoteArgument(GetTextScopeOutcomesArgument());
+            }
+
+            if (preserveBaseUiAssets)
+            {
+                arguments += " --skip-ui-texture-fix";
+            }
+
+            return arguments;
+        }
+
+        private string FormatTextConfigurationSummary()
+        {
+            return "profile=" + textProfile +
+                   "; Story=" + FormatScopeOutcome(preserveBaseStoryText) +
+                   ", BNpcName=" + FormatScopeOutcome(preserveBaseBnpcNames) +
+                   ", Actions=" + FormatScopeOutcome(preserveBaseActionNames) +
+                   ", DutyNames=" + FormatScopeOutcome(preserveBaseDutyNames) +
+                   ", ItemNames=" + FormatScopeOutcome(preserveBaseItemNames) +
+                   ", PlaceNames=" + FormatScopeOutcome(preserveBasePlaceNames) +
+                   ", CommonPhrases=" + FormatScopeOutcome(preserveBaseCommonPhrases) +
+                   ", Remainder=" + FormatScopeOutcome(preserveBaseRemainderText) +
+                   ", UIAssets=" + FormatScopeOutcome(preserveBaseUiAssets);
+        }
+
+        private string GetTextProfileDisplayName()
+        {
+            return string.Equals(textProfile, "custom", StringComparison.Ordinal)
+                ? "직접 설정"
+                : "전체 한글";
         }
 
         private string GetEmbeddedToolDir()
@@ -2153,7 +2447,7 @@ namespace FFXIVKoreanPatch.Main
                 );
             output.Add("Time Local: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
             output.Add("Target Language: " + targetLanguageDisplayName + " (" + targetLanguageCode + ")");
-            output.Add("Base Language Name Options: " + FormatBaseLanguageNameOptionSummary());
+            output.Add("Text Configuration: " + FormatTextConfigurationSummary());
             output.Add("Global Game: " + (string.IsNullOrEmpty(targetDir) ? "(unset)" : targetDir));
             output.Add("Korean Game: " + (string.IsNullOrEmpty(koreaSourceDir) ? "(unset)" : koreaSourceDir));
             output.Add("Global Version: " + (string.IsNullOrEmpty(targetVersion) ? "(unknown)" : targetVersion));
@@ -2243,7 +2537,7 @@ namespace FFXIVKoreanPatch.Main
 
             StringBuilder sb = new StringBuilder();
             sb.AppendLine("{");
-            sb.AppendLine("  \"schemaVersion\": 1,");
+            sb.AppendLine("  \"schemaVersion\": 2,");
             AppendJsonString(sb, "generatedAtLocal", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
             AppendJsonString(sb, "generatedAtUtc", DateTime.UtcNow.ToString("o"));
             AppendJsonString(sb, "targetLanguage", targetLanguageCode);
@@ -2255,9 +2549,11 @@ namespace FFXIVKoreanPatch.Main
             AppendJsonString(sb, "releaseOutputDir", outputDir);
             AppendJsonString(sb, "applyGameDir", applyGameDir);
             AppendJsonString(sb, "backupDir", backupDir);
-            sb.AppendLine("  \"preserveBaseBnpcNames\": " + (preserveBaseBnpcNames ? "true" : "false") + ",");
-            sb.AppendLine("  \"preserveBaseActionNames\": " + (preserveBaseActionNames ? "true" : "false") + ",");
-            sb.AppendLine("  \"preserveBaseCommonPhrases\": " + (preserveBaseCommonPhrases ? "true" : "false") + ",");
+            AppendJsonString(sb, "textProfile", buildTextPatch ? textProfile : "font-only");
+            AppendJsonString(sb, "textScopeOutcomes", buildTextPatch ? GetTextScopeOutcomesArgument() :
+                string.Join(",", outcomeSettingKeys.Take(8).Select(key => key + "=base")));
+            AppendJsonString(sb, "uiAssets", FormatScopeOutcome(!buildTextPatch || preserveBaseUiAssets));
+            sb.AppendLine("  \"includeFont\": " + (buildFontPatch || buildTextPatch ? "true" : "false") + ",");
             sb.AppendLine("  \"debugApply\": " + (debugApply ? "true" : "false") + ",");
             sb.AppendLine("  \"files\": [");
 
@@ -3118,7 +3414,7 @@ namespace FFXIVKoreanPatch.Main
                 lines.Add("[OK] 현재 실행 파일은 릴리즈 빌드입니다. 실제 적용 버튼은 글로벌 서버 클라이언트 폴더를 변경합니다.");
 #endif
                 lines.Add("[OK] 베이스 클라이언트 언어: " + targetLanguageDisplayName + " (" + targetLanguageCode + ")");
-                lines.Add("[OK] Base language name options: " + FormatBaseLanguageNameOptionSummary());
+                lines.Add("[OK] 텍스트 구성: " + FormatTextConfigurationSummary());
 
                 string globalVersion = string.Empty;
                 string koreaVersion = string.Empty;
@@ -3321,6 +3617,41 @@ namespace FFXIVKoreanPatch.Main
                 "계속할까요?");
         }
 
+        private bool ConfirmPatchComposition(bool includeTextPatch)
+        {
+            if (string.IsNullOrEmpty(targetDir))
+            {
+                ShowMessage(ViewMessageKind.Error, "글로벌 서버 클라이언트 경로가 설정되지 않았어요.");
+                return false;
+            }
+
+            string[] labels =
+            {
+                "스토리·퀘스트 텍스트", "전투 NPC 이름", "기술 이름", "임무 이름",
+                "아이템 이름", "지역 이름", "자동 번역 상용구", "기타 게임 텍스트", "UI 이미지"
+            };
+            bool[] outcomes = GetScopeOutcomes();
+            var rows = new List<KeyValuePair<string, string>>();
+            for (int i = 0; i < labels.Length; i++)
+            {
+                rows.Add(new KeyValuePair<string, string>(labels[i],
+                    !includeTextPatch || outcomes[i] ? targetLanguageDisplayName + " 원본" : "한국어"));
+            }
+            rows.Add(new KeyValuePair<string, string>("한글 표시 폰트", "항상 포함"));
+            string title = includeTextPatch ? GetTextProfileDisplayName() + " 패치 확인" : "폰트만 패치 확인";
+            string message = "실제 글로벌 서버 클라이언트 폴더에 아래 구성을 적용합니다." +
+                Environment.NewLine + "대상 경로: " + targetDir +
+                Environment.NewLine + "베이스 언어: " + targetLanguageDisplayName + " (" + targetLanguageCode + ")" +
+                Environment.NewLine + "작업 전 백업 위치: " + GetBackupRootDir() +
+                Environment.NewLine + "패치가 끝날 때까지 프로그램을 종료하지 마세요.";
+            if (includeTextPatch && !preserveBaseRemainderText && preserveBaseUiAssets)
+            {
+                message += Environment.NewLine +
+                    "UI 이미지는 원문으로 유지하며, 한국어 UI 글자 표시를 위한 폰트·레이아웃 보정은 별도로 포함합니다.";
+            }
+            return view.ShowPatchConfirmation(title, message, rows);
+        }
+
         #endregion
 
         #region Event Handlers
@@ -3374,7 +3705,6 @@ namespace FFXIVKoreanPatch.Main
                     UpdateStatusLabel("글로벌 서버 클라이언트 경로를 수동으로 지정해주세요.", true);
                     SetProgressValue(0);
                     UpdateDownloadLabel("");
-                    SetActionButtonsEnabled(true);
                     StartInitialPreflightCheck();
                     return;
                 }
@@ -3441,7 +3771,6 @@ namespace FFXIVKoreanPatch.Main
                 // Check all done!
                 UpdateStatusLabel("버전 " + targetVersion + ", 로컬 생성 모드", false);
                 SetProgressValue(0);
-                SetActionButtonsEnabled(true);
                 StartInitialPreflightCheck();
             }
             catch (Exception exception)
@@ -3501,6 +3830,7 @@ namespace FFXIVKoreanPatch.Main
 
         public void BrowseGlobalPath()
         {
+            if (IsWorkActive) return;
             bool cancelled;
             string failureReason;
             string selectedDir = SelectGameDirectory("글로벌 서버 클라이언트 ffxiv_dx11.exe 파일을 선택해주세요...", out cancelled, out failureReason);
@@ -3535,6 +3865,7 @@ namespace FFXIVKoreanPatch.Main
 
         public void BrowseKoreaPath()
         {
+            if (IsWorkActive) return;
             bool cancelled;
             string failureReason;
             string selectedDir = SelectGameDirectory("한국 서버 클라이언트 ffxiv_dx11.exe 파일을 선택해주세요...", out cancelled, out failureReason);
@@ -3568,6 +3899,7 @@ namespace FFXIVKoreanPatch.Main
 
         public void SetTargetLanguage(int selectedIndex)
         {
+            if (IsWorkActive) return;
             if (selectedIndex == 1)
             {
                 targetLanguageCode = "en";
@@ -3584,31 +3916,57 @@ namespace FFXIVKoreanPatch.Main
             SetActionButtonsEnabled(true);
         }
 
-        public void SetPreserveOptions(
+        public void SelectTextProfile(string profile)
+        {
+            if (IsWorkActive) return;
+            textProfile = NormalizeTextProfile(profile);
+            if (textProfile == "custom") ApplyScopeOutcomes(customDraft);
+            else ApplyFullTextProfileDefaults();
+            MarkPreflightRequired();
+            SaveTextConfigurationSettings();
+            UpdateStatusLabel("텍스트·UI 구성: " + GetTextProfileDisplayName());
+            SetActionButtonsEnabled(true);
+        }
+
+        public void SetTextConfiguration(
+            string profile,
+            bool story,
             bool bnpc,
             bool actionNames,
-            bool commonPhrases,
             bool dutyNames,
             bool itemNames,
-            bool placeNames)
+            bool placeNames,
+            bool commonPhrases,
+            bool remainder,
+            bool uiAssets)
         {
-            preserveBaseBnpcNames = bnpc;
-            preserveBaseActionNames = actionNames;
-            preserveBaseCommonPhrases = commonPhrases;
-            preserveBaseDutyNames = dutyNames;
-            preserveBaseItemNames = itemNames;
-            preserveBasePlaceNames = placeNames;
-            SaveBaseLanguageNameOptionSettings();
-            UpdateStatusLabel("원문 유지 옵션: " + FormatBaseLanguageNameOptionSummary());
+            if (IsWorkActive) return;
+            textProfile = NormalizeTextProfile(profile);
+            if (textProfile == "custom")
+            {
+                customDraft = new[] { story, bnpc, actionNames, dutyNames, itemNames, placeNames, commonPhrases, remainder, uiAssets };
+                ApplyScopeOutcomes(customDraft);
+            }
+            else
+            {
+                ApplyFullTextProfileDefaults();
+            }
+            MarkPreflightRequired();
+
+            SaveTextConfigurationSettings();
+            UpdateStatusLabel("텍스트·UI 구성: " + GetTextProfileDisplayName());
+            SetActionButtonsEnabled(true);
         }
 
         public void SetFontPatchProfile(string profileValue)
         {
+            if (IsWorkActive) return;
             fontPatchProfile = string.IsNullOrEmpty(profileValue) ? "full" : profileValue;
         }
 
         public void DetectPaths()
         {
+            if (IsWorkActive) return;
             targetDir = string.Empty;
             koreaSourceDir = string.Empty;
             targetVersion = string.Empty;
@@ -3635,6 +3993,7 @@ namespace FFXIVKoreanPatch.Main
 
         public void ResetPaths()
         {
+            if (IsWorkActive) return;
             targetDir = string.Empty;
             koreaSourceDir = string.Empty;
             targetVersion = string.Empty;
@@ -3674,6 +4033,7 @@ namespace FFXIVKoreanPatch.Main
 
         public void RequestCleanup()
         {
+            if (IsWorkActive) return;
             bool confirmed = view.ShowConfirm(
                 "오래된 파일 정리",
                 "generated-release는 30일, 로그는 7일 지난 파일을 정리하고, 패치 백업은 최신 1개만 남길까요?",
@@ -3710,6 +4070,7 @@ namespace FFXIVKoreanPatch.Main
 
         public void RequestRestoreBackup()
         {
+            if (IsWorkActive) return;
 #if TEST_BUILD
             ShowMessage(ViewMessageKind.Warning, "테스트 빌드에서는 실제 글로벌 서버 클라이언트 폴더를 변경할 수 없어요.");
 #else
@@ -3744,6 +4105,8 @@ namespace FFXIVKoreanPatch.Main
                 return;
             }
 
+            restoreBusy = true;
+            SetActionButtonsEnabled(false);
             try
             {
                 RestoreSelectedBackup(backupDir);
@@ -3757,19 +4120,21 @@ namespace FFXIVKoreanPatch.Main
                     "로그: " + logPath,
                     exception.ToString());
             }
+            finally
+            {
+                restoreBusy = false;
+                SetActionButtonsEnabled(true);
+            }
 
-            // Restoring may change the installed patch state, so refresh gates.
-            SetActionButtonsEnabled(true);
 #endif
         }
 
         private void StartLocalPatchBuild(bool includeTextPatch, bool includeFontPatch, bool debugApply)
         {
-            if (buildBusy)
+            if (IsWorkActive)
             {
                 return;
             }
-
             includeFontPatch = includeFontPatch || includeTextPatch;
 
             string[] selectedPatchFiles = GetPatchFilesForSelection(includeTextPatch, includeFontPatch);
@@ -3816,10 +4181,11 @@ namespace FFXIVKoreanPatch.Main
 
         public void RequestFullPatch()
         {
+            if (IsWorkActive) return;
 #if TEST_BUILD
             ShowMessage(ViewMessageKind.Warning, "테스트 빌드에서는 실제 글로벌 서버 클라이언트 폴더에 설치할 수 없어요.");
 #else
-            if (!ConfirmActualClientWrite("전체 한글 패치"))
+            if (!ConfirmPatchComposition(true))
             {
                 return;
             }
@@ -3830,10 +4196,11 @@ namespace FFXIVKoreanPatch.Main
 
         public void RequestFontPatch()
         {
+            if (IsWorkActive) return;
 #if TEST_BUILD
             ShowMessage(ViewMessageKind.Warning, "테스트 빌드에서는 실제 글로벌 서버 클라이언트 폴더에 설치할 수 없어요.");
 #else
-            if (!ConfirmActualClientWrite("폰트만 패치"))
+            if (!ConfirmPatchComposition(false))
             {
                 return;
             }
@@ -3847,7 +4214,7 @@ namespace FFXIVKoreanPatch.Main
 #if TEST_BUILD
             ShowMessage(ViewMessageKind.Warning, "테스트 빌드에서는 실제 글로벌 서버 클라이언트 폴더를 변경할 수 없어요.");
 #else
-            if (removeBusy)
+            if (IsWorkActive)
             {
                 return;
             }
@@ -3865,7 +4232,7 @@ namespace FFXIVKoreanPatch.Main
 
         private void StartPreflightCheck()
         {
-            if (preflightBusy)
+            if (IsWorkActive)
             {
                 return;
             }
@@ -3882,8 +4249,12 @@ namespace FFXIVKoreanPatch.Main
                 return;
             }
 
-            initialPreflightStarted = true;
-            StartPreflightCheck();
+            view.RunOnUi(() =>
+            {
+                initialCheckBusy = false;
+                initialPreflightStarted = true;
+                StartPreflightCheck();
+            });
         }
 
         public void RequestPreflight()
@@ -3982,34 +4353,9 @@ namespace FFXIVKoreanPatch.Main
                     arguments += " --include-font";
                 }
 
-                if (buildTextPatch && preserveBaseBnpcNames)
+                if (buildTextPatch)
                 {
-                    arguments += " --preserve-base-bnpc-names";
-                }
-
-                if (buildTextPatch && preserveBaseActionNames)
-                {
-                    arguments += " --preserve-base-action-names";
-                }
-
-                if (buildTextPatch && preserveBaseCommonPhrases)
-                {
-                    arguments += " --preserve-base-common-phrases";
-                }
-
-                if (buildTextPatch && preserveBaseDutyNames)
-                {
-                    arguments += " --preserve-base-duty-names";
-                }
-
-                if (buildTextPatch && preserveBaseItemNames)
-                {
-                    arguments += " --preserve-base-item-names";
-                }
-
-                if (buildTextPatch && preserveBasePlaceNames)
-                {
-                    arguments += " --preserve-base-place-names";
+                    arguments += GetTextConfigurationGeneratorArguments();
                 }
 
                 if (!buildTextPatch && buildFontPatch)
@@ -4021,7 +4367,7 @@ namespace FFXIVKoreanPatch.Main
                     logLines.Add("Say quest chat phrase anonymization: disabled (sheet coverage incomplete)");
                 }
 
-                logLines.Add("Base language name options: " + FormatBaseLanguageNameOptionSummary());
+                logLines.Add("Text configuration: " + FormatTextConfigurationSummary());
 
                 string patchPolicyPath = FindPatchPolicyPath(patchGeneratorPath);
                 if (!string.IsNullOrEmpty(patchPolicyPath))
@@ -4045,7 +4391,7 @@ namespace FFXIVKoreanPatch.Main
                 logLines.Add("Arguments: " + arguments);
 
                 string buildDescription = buildTextPatch && buildFontPatch
-                    ? targetLanguageDisplayName + " 클라이언트용 전체 패치"
+                    ? targetLanguageDisplayName + " 클라이언트용 " + GetTextProfileDisplayName() + " 패치"
                     : "한글 폰트 패치";
                 UpdateStatusLabel(buildDescription + " 생성 중...");
                 UpdateDownloadLabel("0%");
@@ -4159,7 +4505,9 @@ namespace FFXIVKoreanPatch.Main
                 }
 
                 string logPath = WriteOperationLog("build-release", logLines);
-                string operationName = buildTextPatch && buildFontPatch ? "전체 한글 패치" : "한글 폰트 패치";
+                string operationName = buildTextPatch && buildFontPatch
+                    ? GetTextProfileDisplayName() + " 패치"
+                    : "한글 폰트 패치";
                 string completionSummary = useDebugApplyPath
                     ? "원본 글로벌 서버 클라이언트는 변경하지 않고 테스트 경로에 적용했습니다."
                     : "생성된 패치 파일을 글로벌 서버 클라이언트에 적용했습니다.";
@@ -4168,7 +4516,7 @@ namespace FFXIVKoreanPatch.Main
                 List<KeyValuePair<string, string>> resultDetails = new List<KeyValuePair<string, string>>();
                 resultDetails.Add(new KeyValuePair<string, string>("작업", operationName));
                 resultDetails.Add(new KeyValuePair<string, string>("베이스 언어", targetLanguageDisplayName + " (" + targetLanguageCode + ")"));
-                resultDetails.Add(new KeyValuePair<string, string>("원문 유지 옵션", FormatBaseLanguageNameOptionSummary()));
+                resultDetails.Add(new KeyValuePair<string, string>("텍스트 구성", FormatTextConfigurationSummary()));
                 resultDetails.Add(new KeyValuePair<string, string>("생성 폴더", releaseOutputDir));
                 resultDetails.Add(new KeyValuePair<string, string>("적용 위치", applyGameDir));
                 resultDetails.Add(new KeyValuePair<string, string>("Manifest", manifestPath));
@@ -4268,7 +4616,9 @@ namespace FFXIVKoreanPatch.Main
             }
             finally
             {
+#if !TEST_BUILD
                 removeBusy = false;
+#endif
                 if (restoreSucceeded)
                 {
                     // Auto re-run preflight so the dashboard reflects the now-clean client
