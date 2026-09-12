@@ -120,7 +120,7 @@ Do not close live client issues from generated-output checks alone.
 
 ## Implementation Notes
 
-- `BuildOptions.ShouldBuildUiTextureFix` must return false when `FontOnly` is true.
+- `BuildOptions.ShouldBuildUiPatch` and both of its predicates (`ShouldBuildLocalizedUiImages`, `ShouldPatchUiTextFonts`) must return false when `FontOnly` is true.
 - UI `GetPatchFilesForSelection(false, true)` must select only `000000` font patch files.
 - `FontPatchGenerator` must skip full-patch-only font repairs when `FontOnly` is true:
   - lobby Hangul allocation

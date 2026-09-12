@@ -11,27 +11,27 @@
 
 한국 서버 클라이언트의 한글 리소스를 읽어 **글로벌 서버(일본어/영어) 클라이언트**에 적용하는 한글 패치를 내 PC에서 직접 생성·설치·제거하는 도구입니다. 원격 다운로드 없이 두 클라이언트만 있으면 됩니다.
 
-<div align="center">
-  <img src="Docs/dashboard-preview.svg" alt="FFXIV 한글 패치 대시보드" width="720">
-</div>
-
 ---
 
 ## 사용법 (일반 사용자)
 
 1. [Releases](https://github.com/qrer321/ffxiv-patch/releases/latest)에서 `FFXIVKoreanPatch.exe`를 받아 **관리자 권한**으로 실행합니다.
-2. 글로벌·한국 클라이언트 경로가 자동으로 잡힙니다. 안 잡히면 `변경`으로 지정하세요.
+2. 글로벌·한국 클라이언트 경로가 자동으로 잡힙니다. `경로 확인`을 열어 확인하고, 안 잡히면 `변경`으로 지정하세요.
 3. 베이스 언어(글로벌 클라이언트 언어)를 고릅니다. — 일본어 `ja` 또는 영어 `en`.
 4. 사전 점검이 통과하면 아래 버튼이 활성화됩니다.
 
 | 버튼 | 하는 일 |
 |------|---------|
-| **전체 한글 패치** | UI · 대사 · 폰트를 전부 한국어로 교체 |
+| **선택 구성 패치** | `전체 한글` 또는 `직접 설정`으로 선택한 텍스트·UI 이미지 구성과 한글 폰트를 적용 |
 | **폰트만 패치** | 게임 텍스트는 그대로 두고, 채팅의 한글만 표시되게 함 |
 | **패치 제거** | 게임 파일을 원본으로 복원 |
 
 - 한글 채팅 입력에 필요한 Scancode Map 레지스트리가 없으면 설치를 안내합니다.
-- `원문 유지` 칩(보스명·기술명·상용구·임무명·아이템명·지역명)을 켜면 해당 텍스트는 번역하지 않고 베이스 클라이언트 원문을 둡니다.
+- `전체 한글`과 `직접 설정`을 제공합니다. 8개 텍스트 범위와 UI 이미지마다 `한국어`와 베이스 언어(`일본어`/`영어`) 버튼을 나란히 표시합니다. 스토리만 한국어로 보려면 `스토리·퀘스트 텍스트`만 `한국어`, 나머지 7개 텍스트 범위와 UI 이미지는 베이스 언어로 선택합니다. 텍스트 구성 패치에는 한글 폰트가 항상 포함됩니다.
+- 베이스 언어와 마지막 직접 설정은 자동 저장됩니다. `전체 한글`로 전환하거나 다시 실행해도 직접 설정 초안은 보관됩니다. 저장하지 못하면 하단에 `설정 저장 실패`를 표시합니다.
+- 본문을 스크롤해도 `다음 적용 구성`과 적용 버튼은 하단에 고정됩니다. 현재 설치 상태는 다음에 적용할 선택과 별도로 표시합니다.
+- 적용 전 확인창에서 대상 경로·언어와 9개 결과·폰트를 확인합니다. 작업 중에는 선택 변경과 창 닫기가 차단됩니다.
+- UI 이미지를 베이스 언어로 유지해도 `기타 게임 텍스트`가 한국어이면 필요한 UI 글자 표시용 폰트·레이아웃 보정은 별도로 포함합니다. 모든 텍스트를 베이스 언어로 선택하면 텍스트 패키지는 적용하지 않습니다.
 - 고급 기능에서 백업 복구 · 생성/로그 폴더 열기 · 오래된 파일 정리를 할 수 있습니다.
 
 ## 요구 사항
@@ -47,7 +47,7 @@
 
 - Visual Studio 2026 (또는 **Build Tools 18**) — MSBuild 경로가 `%ProgramFiles(x86)%\Microsoft Visual Studio\18\BuildTools\MSBuild\Current\Bin\MSBuild.exe`로 고정되어 있습니다.
 - .NET Framework 4.8.1 개발 도구 (WPF UI · 제너레이터 · 검증기 모두 프레임워크 타깃).
-- 폰트 패키지 `TTMPD.mpd` / `TTMPL.mpl`을 `FFXIVPatchGenerator\FontPatchAssets\`에 두어야 폰트 패치가 만들어집니다. (저장소에는 포함되지 않음)
+- 폰트 패키지 `TTMPD.mpd` / `TTMPL.mpl`을 `FFXIVPatchGenerator\FontPatchAssets\`에 둡니다. 두 파일은 UI 빌드의 필수 입력이며, 하나라도 없으면 빌드가 중단됩니다. (저장소에는 포함되지 않음)
 
 ### 배포용 실행 파일 빌드
 
@@ -55,7 +55,7 @@
 .\Scripts\build-release.ps1
 ```
 
-출력: `Release\Public\FFXIVKoreanPatch.exe` (단일 파일). 제너레이터와 폰트 패키지는 exe에 내장되고, 실행 시 `%LocalAppData%\FFXIVKoreanPatch\embedded-tools`로 자동 추출됩니다. 빌드 스크립트가 내장 payload의 SHA256이 방금 빌드한 것과 일치하는지 검증합니다.
+출력: `Release\Public\FFXIVKoreanPatch.exe` (단일 파일). 제너레이터, TTMP 폰트 패키지 두 파일, RSV 맵이 exe에 내장되고, 실행 시 `%LocalAppData%\FFXIVKoreanPatch\embedded-tools`로 자동 추출됩니다. 빌드 스크립트는 폰트 입력의 누락·빈 파일을 빌드 전에 차단하고, 내장된 네 payload 각각의 SHA256이 빌드 입력과 일치하는지 검증합니다.
 
 테스트 빌드(`Release\Test\FFXIVKoreanPatch.Test.exe`)는 실제 클라이언트에 쓰지 않고 `debug-apply` 폴더에만 적용합니다:
 
@@ -82,6 +82,8 @@ UI 없이 release 파일만 만들고 싶으면 제너레이터를 직접 호출
 | `--global` / `--korea` | 글로벌 · 한국 서버 `game` 폴더 (필수) |
 | `--output` | release 출력 폴더 (필수, 원본 game 폴더 내부면 중단) |
 | `--target-language ja\|en` | 글로벌 대상 언어 슬롯 (기본 `ja`) |
+| `--text-profile full\|story\|custom` | 텍스트 범위 프리셋 (기본 `full`) |
+| `--text-scope-outcomes <csv>` | `custom` 프로필의 8개 범위를 `ko`/`base`로 지정 |
 | `--include-font` | 텍스트 + 폰트 패치 함께 생성 |
 | `--font-only` | 폰트 패치만 생성 |
 | `--base-index` / `--base-font-index` / `--base-ui-index` (+ `*-index2`) | clean index 명시 (배포용 권장) |

@@ -65,7 +65,7 @@ orig.060000.win32.index
 orig.060000.win32.index2
 ```
 
-UI가 release 폴더를 적용할 때는 별도로 `manifest.json`을 생성해 적용 파일의 크기와 SHA1을 기록합니다.
+UI가 release 폴더를 적용할 때는 별도로 `manifest.json`을 생성해 선택한 패키지·원본 index·버전 파일의 크기와 SHA1, `uiAssets` 결과를 기록합니다. 출력 폴더에 남아 있는 미선택 패키지는 포함하지 않습니다.
 `--diagnostic-csv <sheet>`를 지정하면 `diagnostic-csv\` 폴더에 sheet별 비교 CSV가 추가로 생성됩니다.
 
 ## 텍스트 패치 방식
@@ -89,11 +89,37 @@ UI가 release 폴더를 적용할 때는 별도로 `manifest.json`을 생성해 
 - `ExcelVariant.Default` sheet만 처리합니다.
 - `ExcelVariant.Subrows` sheet는 아직 스킵하고 `patch-diagnostics.tsv`에 `unsupported-subrows`로 기록합니다.
 
+### 텍스트 구성 프로필
+
+- `full`(기본값): 8개 범위를 모두 한국어 source로 라우팅합니다. 기존 전체 한글 출력 계약입니다.
+- `story`: 임무 중 대사·목표 범위만 한국어로 라우팅하고 나머지 7개 범위는 대상 베이스 언어 원문을 유지합니다. 이미지형 UI까지 한국어로 바뀌지 않도록 `060000` UI 텍스처 생성도 제외합니다.
+- `custom`: 8개 범위의 결과를 `--text-scope-outcomes`로 모두 지정합니다. 형식은 `story=ko,bnpc=base,actions=ko,duty=base,item=base,place=base,common=base,remainder=base`입니다.
+
+UI 이미지는 아홉 번째 EXD 텍스트 범위가 아닙니다. `custom`에서 UI 이미지를 원문으로 유지하려면 `--skip-ui-texture-fix`를 함께 사용하고, 한국어 이미지를 만들려면 이 플래그를 생략합니다. WPF의 텍스트·UI 구성 작업은 프로필과 관계없이 `--include-font`를 항상 전달하며, `--font-only`는 별도 작업입니다.
+
+`--skip-ui-texture-fix`는 이미지 지역화만 제외합니다. `--include-font`와 한국어 `remainder`를 선택하면 PartyMemberList/ContentsFinder/RaidFinder의 기존 글자 표시용 ULD 보정은 유지합니다. 이 보정만 생성할 때는 한국 UI 텍스처와 글로벌 EXD 입력이 필요하지 않습니다.
+
+8개 텍스트 결과를 모두 `base`로 지정하면 `0a0000` 텍스트 출력은 만들지 않고 요청한 폰트·이미지만 생성합니다. `--include-font`가 없으면 폰트를 강제로 추가하지 않습니다. 이미지 전용 구성과 `--font-only`는 다른 작업이며, 후자는 항상 `000000`만 생성합니다.
+
+범위는 `story`, 전투 NPC·몬스터 이름(`bnpc`), 기술 이름(`actions`), 임무 이름(`duty`), 아이템 이름(`item`), 지역 이름(`place`), 자동 번역 상용구(`common`), 기타 게임 텍스트(`remainder`) 순으로 분류합니다. 스토리 판정이 먼저이며, 이름/상용구 그룹 판정과 어느 쪽에도 해당하지 않는 문자열은 `remainder`입니다.
+
+`story`에는 `quest/*`, `cut_scene/*`, `opening/*`, `custom/*`, leaf 이름에 `Talk`가 포함된 sheet, `Balloon`, `NpcYell`, `TopicSelect`, `Quest`, `CompleteJournal`, `QuestRedoChapterUI*`가 포함됩니다. `InstanceContentTextData`는 row `1000` 이상만 story이고 row `999` 이하는 `remainder`입니다.
+
+마수도감·마수 시련장의 다음 문자열은 모두 `remainder`입니다.
+
+- `XBMPet`: 마수도감 설명과 공격 관련 문자열.
+- `XBMItem`: 시련장 아이템의 단수형·복수형·표시 이름, 효과 설명과 짧은 설명.
+- `XBMItemType`: 시련장 아이템 분류 이름.
+- `XBMScoreBonus`: 추가/점수 보너스 이름과 달성 조건.
+
+이 네 시트만 기존 row-id 매칭 대상에 포함하며 다른 `XBM*` 시트는 일괄 허용하지 않습니다. UI에서는 **전체 한글** 또는 **직접 설정 → 기타 게임 텍스트 → 한국어**로 적용합니다. `remainder=base`이면 다른 7개 범위가 한국어여도 위 문자열은 선택한 일본어/영어 원문을 유지합니다. 일반 **아이템 이름**이나 UI 이미지·전투 NPC 이름·기술 이름 선택만으로는 바뀌지 않습니다. 기타 게임 텍스트는 마수 시련장 전용 옵션이 아니므로 같은 범위의 메뉴·일반 설명도 함께 선택됩니다.
+
 ## 진단과 정책 파일
 
-기본 생성물에는 `patch-diagnostics.tsv`가 포함됩니다. 이 파일에는 sheet/page별 처리 상태, 패치 row 수, string-key/row-id 매칭 수, RSV 잔존 수가 기록됩니다.
+텍스트 생성 또는 명시적 CSV 진단에는 `patch-diagnostics.tsv`가 포함됩니다. 이 파일에는 sheet/page별 처리 상태, 패치 row 수, string-key/row-id 매칭 수, RSV 잔존 수가 기록됩니다. 모든 텍스트가 Base인 일반 실행은 자산 전용 경로를 사용하므로 이 파일을 생성하지 않습니다.
 
 추가 진단이 필요하면 `--diagnostic-csv <sheet>`를 사용합니다. 지정한 sheet에 대해 글로벌 문자열, 한국 서버 문자열, 실제 선택된 문자열, 매핑 방식, row/column 정책 적용 여부를 CSV로 확인할 수 있습니다.
+Base 셀은 remap/RSV 적용 전에 글로벌 원문으로 선택하며 CSV에도 `keep-global`로 기록합니다. 모든 텍스트가 Base여도 명시적 CSV 진단은 생성하지만 `0a0000` 출력은 만들지 않습니다.
 
 생성된 release 폴더는 `Scripts\verify-patch-routes.ps1`로 후검증할 수 있습니다. 이 검증기는 데이터센터 row, 시간 단위, 파티 리스트 본인 번호, 주요 숫자 glyph를 확인하고, 기본적으로 로비/대사 문장 glyph PNG와 `glyph-report.tsv`를 함께 출력합니다. `캐릭터 정보를 변경하기 위해`, `진정한 변혁을 위해서라면` 같은 문장에서 특정 한글 glyph에 잔픽셀이 겹치는지 확인할 때 사용합니다.
 
@@ -189,6 +215,11 @@ UI 텍스처 패치는 `060000` UI 패키지를 대상으로 하며 새 `060000.
 --rsv-map <file>                RSV token map JSON 파일
 --anonymize-quest-chat-phrases  현재 비활성화/no-op, quest say sheet 커버리지 완료 전까지 적용하지 않음
 --diagnostic-csv <sheet>        지정 sheet의 row/column 비교 CSV 출력
+--text-profile <name>           텍스트 구성: full(기본), story, custom
+--text-scope-outcomes <csv>     custom의 8개 범위를 ko/base로 모두 지정
+                                story,bnpc,actions,duty,item,place,common,remainder
+                                순서와 무관하며 중복/누락/미지원 키는 오류
+                                아래 preserve-base 옵션은 이전 CLI 호환용
 --preserve-base-bnpc-names     BNpcName 이름을 베이스 클라이언트 언어로 유지
 --preserve-base-action-names   기술 이름을 베이스 클라이언트 언어로 유지
 --preserve-base-common-phrases 상용구를 베이스 클라이언트 언어로 유지
@@ -207,7 +238,7 @@ UI 텍스처 패치는 `060000` UI 패키지를 대상으로 하며 새 `060000.
 --base-font-index2 <file>       clean 000000.win32.index2 지정
 --base-ui-index <file>          clean 060000.win32.index 지정
 --base-ui-index2 <file>         clean 060000.win32.index2 지정
---skip-ui-texture-fix           060000 UI 텍스처 패치 생성 제외
+--skip-ui-texture-fix           지역화 UI 이미지 제외; 한국어 remainder의 ULD 글자 표시 보정은 유지
 --allow-patched-global          이미 dat1을 가리키는 index 사용 허용, 실험용
 --allow-korean-font-fallback    TTMP 누락 시 한국 서버 폰트 직접 복사 허용, 실험용
 --allow-version-mismatch        글로벌/한국 서버 버전 불일치 허용, 진단용

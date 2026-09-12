@@ -18,8 +18,7 @@
 - 글로벌/한국 서버 클라이언트 경로 수동 지정
 - `ffxiv_dx11.exe`를 선택해도 `game` 폴더로 보정
 - 현재 설정된 경로를 UI에 표시
-- 테스트 빌드 전용 경로 자동 탐색 버튼
-- 테스트 빌드 전용 경로 리셋 버튼
+- 경로 확인 패널에서 경로 자동 탐색 및 리셋
 - 테스트 빌드 전용 폰트 프로필 선택
 
 ### 언어 선택
@@ -29,14 +28,23 @@
   - 영어 클라이언트 `en`
 - 언어 변경 시 사전 점검 상태를 다시 필요 상태로 변경
 - 선택한 언어 슬롯에 맞는 `*_ja.exd` 또는 `*_en.exd` release 생성
+- 베이스 언어 자동 저장 및 재시작 시 복원
 
-### 원문 유지
+### 텍스트 구성
 
-- 보스명, 기술명, 상용구, 임무명, 아이템명, 지역명을 서로 독립적으로 선택
-- 선택한 항목의 EXD 이름 컬럼만 베이스 클라이언트 언어(`ja`/`en`)로 유지
-- 아이템 설명은 아이템명 옵션과 분리해 한국어 패치 경로를 유지
-- 지역명 옵션은 `PlaceName` 텍스트만 대상으로 하며 이미지형 지역명과 지도 텍스처는 변경하지 않음
-- 선택값을 `%LOCALAPPDATA%\FFXIVKoreanPatch\patch-options.txt`에 저장
+- `전체 한글`, `직접 설정` 두 구성 제공
+- 8개 텍스트 범위와 UI 이미지를 항상 표시하고, 각각 `한국어`/선택한 베이스 언어(`일본어` 또는 `영어`)를 명시적인 라디오 버튼으로 선택
+- 스토리만 한국어로 보려면 `스토리·퀘스트 텍스트`만 `한국어`, 나머지 7개 텍스트 범위와 UI 이미지는 베이스 언어로 선택
+- 개별 결과를 바꾸면 `직접 설정`으로 전환
+- 메인 동작 버튼은 `선택 구성 패치` 하나를 유지하고 설명/요약만 선택 결과에 맞게 갱신
+- 텍스트 구성 패치는 선택 결과와 관계없이 한글 폰트를 항상 포함
+- 기본값은 기존 동작을 유지하는 `전체 한글`
+- 이전 UI의 `story` 저장값은 Story만 한국어인 9개 결과의 `custom`으로 마이그레이션
+- 이전 6개 `preserveBase...` 키는 하나라도 `true`이면 `custom`, 모두 `false`이면 `full`로 읽음
+- `targetLanguage`, `textProfile`, 9개 적용 결과와 별도의 `custom.*` 초안을 저장. 전체 한글로 전환해도 직접 설정을 보존
+- 설정 파일은 원자적으로 교체하며 저장 실패는 하단에 계속 표시. 읽기 불가/잘못된 설정은 초기화 오류로 안내
+- 본문 스크롤과 하단 고정 적용 영역을 분리. 현재 설치 상태와 다음 선택을 구분하고 좁은 화면에서는 텍스트 범위를 한 열로 표시
+- 릴리즈의 `패치 제거`를 하단 고정 주 동작 행에 붉은 테두리 버튼으로 표시. 좁은 창에서도 패치 버튼과 나란히 유지하며, 기존 실행 확인과 작업 중 잠금은 유지
 
 ### 사전 점검
 
@@ -51,24 +59,27 @@
 - dat1 참조 여부 확인
 - clean/original index 복구 기준 생성 또는 발견
 - 릴리즈 빌드에서 한글 채팅용 Scancode Map 레지스트리 확인 및 설치
-- 사전 점검 결과를 별도 대화상자로 표시
+- 사전 점검 결과를 본문의 펼침 영역에 표시
 - 실패/주의/전체 항목 수 표시
 - 사전 점검 로그 저장
 - 사전 점검 실패 시 실제 패치 버튼 잠금
 
 ### 패치 적용
 
-- 전체 한글 패치
-  - 텍스트 패치 생성
-  - 폰트 패치 생성
-  - UI 텍스처 패치 생성
+- 선택한 텍스트·UI 구성 패치
+  - 하나 이상의 텍스트 범위가 한국어인 경우에만 텍스트 패키지 생성·적용
+  - 한글 폰트 패치 항상 생성
+  - UI 이미지 결과가 한국어이면 지역화 텍스처 생성
+  - 이미지가 원문이어도 기타 게임 텍스트가 한국어이면 기존 UI 글자 표시용 ULD 보정을 별도로 생성
+  - 두 UI 작업 중 하나라도 필요하면 `060000` 패키지 적용. `--skip-ui-texture-fix`는 이미지만 제외
   - 생성된 release 파일 적용
 - 한글 폰트 패치
   - 폰트 패치만 생성
-  - UI 텍스처 패치 생성
   - 생성된 font release 파일 적용
+- 실제 적용 전 대상 경로, 베이스 언어, 9개 결과와 한글 폰트를 확인하는 취소 우선 확인창
+- 초기 점검·사전 점검·생성·적용·제거·백업 복구 중에는 구성 변경 및 창 닫기 차단
 - 제너레이터 진행도를 UI progress bar에 표시
-- 적용할 release 파일의 `manifest.json` 생성
+- 적용할 패키지와 해당 원본 index, 버전 파일만 `manifest.json`에 기록하고 UI 이미지 결과도 별도로 저장
 - 패치 완료 후 프로그램을 종료하지 않음
 - 작업 결과를 별도 대화상자로 표시
 - 작업 결과 대화상자에 제너레이터 요약 표시
@@ -125,6 +136,22 @@
 
 ## 제너레이터 기능
 
+### CLI 텍스트 구성 프로필
+
+- `full`: 8개 텍스트 범위와 UI 이미지를 모두 한국어로 적용하는 기본값
+- `story`: 임무 중 대사·목표만 한국어로 적용하고 나머지 7개 텍스트 범위와 UI 이미지는 베이스 원문 유지
+- `custom`: 8개 텍스트 범위와 UI 이미지 결과를 각각 한국어/베이스 원문으로 선택
+- 텍스트 8개 범위: 스토리·퀘스트, 전투 NPC·몬스터 이름, 기술 이름, 임무 이름, 아이템 이름, 지역 이름, 상용구, 기타 게임 텍스트
+- UI 이미지는 EXD 텍스트 범위가 아닌 별도 `060000` 생성 결과
+- 스토리 범위가 이름/상용구 그룹보다 먼저 판정되고, 어느 그룹에도 속하지 않으면 기타 UI·시스템으로 분류
+- `story` 프로필은 이미지형 UI를 한국어로 바꾸지 않도록 `060000` UI 텍스처 생성 제외
+- `full`은 기존 전체 한글 출력 경로를 그대로 사용
+- 제너레이터 `custom`은 8개 텍스트 결과가 모두 있어야 하며 중복/누락/미지원 범위는 오류
+- SeString은 선택된 source의 최상위 payload type 순서와 RSV 구조를 보존해 검증
+- 검증기에서 스토리/비스토리/mixed page, `InstanceContentTextData` row `999`/`1000` 경계, UI asset 부재, Full 출력 hash 회귀를 독립 검사
+- Story 시나리오와 Full 기준선 비교는 `--checks`로 명시적으로 선택할 때만 실행. 일반 검증 기본 실행에 서로 다른 프로필을 섞지 않음
+- Story 검증은 한국어 원본과 구별되는 실제 비교 대상이 필요하며, 원본 누락에 따른 베이스 폴백은 한국어 검증 수에 포함하지 않음
+
 ### 공통
 
 - 콘솔 실행 지원
@@ -155,6 +182,10 @@
 - 한국 서버 `*_ko.exd`에서 문자열 컬럼 SeString 바이트 추출
 - 글로벌 대상 언어 `*_ja.exd` 또는 `*_en.exd`에 문자열만 반영
 - Default variant EXD 처리
+- `--text-profile full|story|custom`으로 텍스트 구성 선택
+- `--text-scope-outcomes`로 custom의 8개 `ko`/`base` 결과 지정
+- sheet별 범위 정책을 한 번 계산하고 베이스 원문 sheet는 한국 source EXD 읽기 전에 건너뜀. 명시적 CSV 진단은 비교 자료를 읽되 원문 결과를 유지
+- `InstanceContentTextData`는 row `1000` 이상만 story, 그 아래는 기타 UI·시스템으로 분류
 - Subrows variant sheet 스킵
 - Subrows variant sheet를 `unsupported-subrows`로 진단
 - string key 기반 row 매핑
@@ -174,8 +205,8 @@
 - 2026-05-23 보강: 저배율/작은 채팅창/인스턴스 표기에서 PUA glyph 주변 픽셀이 섞이지 않도록 `U+E031`, `U+E037`, `U+E0B1`~`U+E0B8`, `U+E0E1`~`U+E0E8`은 필수 seed로 유지하고, 각 보호 font route에서 clean/source와 patched target 양쪽에 존재하는 PUA glyph도 자동 수집해 dirty target cell을 재사용하지 않고 8px base/mip 주변 영역까지 clean PUA cell로 검증한다.
 - `--anonymize-quest-chat-phrases`는 현재 비활성화/no-op입니다. `quest/*` sheet 커버리지가 불완전하므로 기존 구현은 feature gate 뒤에 보존하고, UI 전체 패치/테스트 자동 패치는 더 이상 퀘스트 채팅 문구 익명화를 자동 활성화하지 않습니다.
 - `patch-policy.json` 기반 sheet/row/column 보존과 row/column remap
-- `patch-diagnostics.tsv` 생성
-- `--diagnostic-csv` 지정 sheet의 row/column 비교 CSV 생성
+- 텍스트 생성 또는 명시적 CSV 진단 시 `patch-diagnostics.tsv` 생성. 모든 텍스트가 Base이면 일반 실행은 자산 전용 경로 사용
+- `--diagnostic-csv` 지정 sheet의 row/column 비교 CSV 생성. Base 셀은 remap/RSV보다 먼저 원문으로 선택
 - `--rsv-map`으로 RSV token JSON map을 읽어 한국어 source row의 `_rsv_...` 토큰을 실제 문자열로 치환
 - `_rsv_` 토큰이 남은 row/string 수 집계
 - `Scripts\verify-patch-routes.ps1`로 release 폴더 후검증
@@ -217,9 +248,9 @@
 - 복구용 `orig.000000.win32.index` 생성
 - 복구용 `orig.000000.win32.index2` 생성
 
-### UI 텍스처 패치
+### UI 이미지와 글자 표시 보정
 
-- 폰트 패치 포함 시 `060000` UI 패키지 패치 생성
+- 텍스트 구성 작업에서 지역화 이미지 또는 한국어 UI 글자 표시용 ULD 보정이 필요할 때 `060000` 패키지 생성
 - 새 `060000.win32.dat4` 생성
 - 수정된 `060000.win32.index` 생성
 - 수정된 `060000.win32.index2` 생성
@@ -236,7 +267,8 @@
 - TTMP 패키지가 제공하는 원래 폰트군 조합을 사용해 렌더링하며, `AXIS_20_lobby`처럼 패키지에 없는 크기/로비용 폰트 경로로 잘못 라우팅되는 것을 방지
 - `Lobby`, `WorldRegionGroup`, `WorldPhysicalDC`, `WorldDCGroupType`, `Addon` 12510번대 서버/데이터센터 이동 안내 row는 대상 글로벌 언어 row를 사용해 읽을 수 없는 proxy glyph 노출을 방지
 - `--base-ui-index`, `--base-ui-index2`로 clean `060000` index/index2 지정
-- `--skip-ui-texture-fix`로 UI 텍스처 패치 생성 제외
+- `story`, UI 이미지 `원문`, `--font-only`에서는 UI 텍스처 패치 생성 제외
+- `--skip-ui-texture-fix`는 지역화 이미지만 제외. 한국어 Remainder의 PartyMemberList/ContentsFinder/RaidFinder ULD 보정은 유지하며 이 보정만 할 때는 한국 UI/글로벌 EXD 입력을 읽지 않음
 
 ### clean index 처리
 
@@ -261,6 +293,8 @@
 - `--font-only`: 폰트만 생성
 - `--font-pack-dir`: TTMP 패키지 위치 지정
 - `--font-profile`: 진단용 폰트 프로필 선택, 기본 `full`
+- `--text-profile`: `full`, `story`, `custom`; 기본 `full`
+- `--text-scope-outcomes`: `custom`의 `story,bnpc,actions,duty,item,place,common,remainder` 결과를 `ko`/`base`로 모두 지정
 - `--base-index`, `--base-index2`: 텍스트 패치용 clean index 지정
 - `--base-font-index`, `--base-font-index2`: 폰트 패치용 clean index 지정
 - `--allow-patched-global`: 이미 패치된 index 사용 허용, 실험용

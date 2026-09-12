@@ -1,95 +1,149 @@
-# Base Language Name Policy
+# Text Scope Profile Policy
 
 ## Purpose
 
-Allow selected name columns to remain in the base global client language while
-the rest of the text patch continues to use Korean source text.
+Select Korean source text or the chosen base client language (`ja`/`en`) by
+observable text scope. This is a text-routing policy. It does not modify
+in-game font repair logic, lobby font atlases, or lobby ULD routes.
 
-This policy is text-routing only. It must not touch font, lobby font atlas, ULD,
-or UI texture patch paths.
+## Profiles
 
-## UI Options
+- `full` (default): all eight text scopes use Korean source text and generated
+  `060000` UI-image assets are included.
+- `story`: Story uses Korean; the other seven text scopes use the selected base
+  client language. Generated `060000` UI-image assets are excluded so maps,
+  loading/title cards, and other image-based UI stay in the base language.
+- `custom`: every text-scope outcome is supplied explicitly as `ko` or `base`;
+  UI-image assets are selected independently.
 
-The patch UI exposes six independent checkboxes. All default to off.
+The generator exposes all three profiles. The production UI exposes only Full
+and Custom so the requested result is selected directly from the nine outcomes,
+without a separate Story button. Story-only composition is Custom with Story
+`ko` and the other seven text outcomes plus UI images set to `base`. Previously
+saved `story` profiles migrate to that canonical Custom composition. Every
+text-composition action includes the Hangul font patch; Font-only remains a
+separate action.
 
-- `BNpcName` original language: preserves the battle NPC name column from the
-  selected base client language.
-- Action name original language: preserves action/skill name columns from the
-  selected base client language.
-- Common phrase original language: preserves auto-translate/common phrase text
-  from the selected base client language.
-- Duty name original language: preserves duty name and short-name columns from
-  the selected base client language.
-- Item name original language: preserves item singular, plural, and display-name
-  columns while leaving item descriptions on the Korean route.
-- Place name original language: preserves all `PlaceName` text variants from the
-  selected base client language.
+## Scope Precedence and Coverage
 
-The local UI values are saved in:
+Story is classified first, then the six named column groups, then Remainder.
+
+| Scope ID | Coverage |
+|---|---|
+| `story` | `quest/*`, `cut_scene/*`, `opening/*`, `custom/*`; any leaf containing `Talk`; `Balloon`, `NpcYell`, `TopicSelect`, `Quest`, `CompleteJournal`, `QuestRedoChapterUI*`; `InstanceContentTextData` rows `>= 1000` |
+| `bnpc` | `BNpcName` offset `0` |
+| `actions` | `Action`, `BuddyAction`, `CraftAction`, `EventAction`, `GeneralAction`, `PetAction` offset `0` |
+| `duty` | `ContentFinderCondition` offsets `0`, `4` |
+| `item` | `Item` offsets `0`, `4`, `12` |
+| `place` | `PlaceName` offsets `0`, `4`, `8` |
+| `common` | `Completion` offsets `0`, `4`, `8` |
+| `remainder` | Every other string cell, including `InstanceContentTextData` rows `< 1000` and non-name columns in mixed sheets |
+
+Base-routed cells keep the exact selected global bytes. Korean-routed cells
+continue through string-key/row fallback, remap, SeString merge, and RSV
+resolution. Base routing wins over those Korean-source transformations.
+
+### Beastmaster Monster Book and Trials
+
+The following sheets belong to `remainder` and use the existing row-ID
+matching route:
+
+- `XBMPet`: monster-book descriptions and other string fields.
+- `XBMItem`: singular/plural/display names, effect descriptions, and short descriptions.
+- `XBMItemType`: trial-item category names.
+- `XBMScoreBonus`: bonus names and completion conditions.
+
+Only these exact sheet names are enabled; other `XBM*` sheets remain outside
+this allowlist.
+
+In the UI, select **전체 한글**, or **직접 설정 → 기타 게임 텍스트 → 한국어**.
+Setting Remainder to Base preserves the selected Japanese/English text even
+when the other seven scopes use Korean. UI images and name-only scopes,
+including Item names, do not control these strings. Remainder is not a
+Beastmaster-only option; it
+also controls the other text covered by that scope.
+
+## UI Settings and Migration
+
+The UI stores the target language, current effective profile/outcomes, and a
+separate nine-outcome Custom draft in:
 
 `%LOCALAPPDATA%\FFXIVKoreanPatch\patch-options.txt`
 
-## Current Scope
+Keys are `targetLanguage` (`ja`/`en`), `textProfile`, `story`, `bnpc`, `actions`,
+`duty`, `item`, `place`, `common`, `remainder`, and `uiAssets`. The nine draft
+keys use the same outcome names prefixed with `custom.`.
 
-When enabled, the policy preserves these target-global string columns:
+UI values are canonicalized when loaded or selected:
 
-- `bnpcname`: `BNpcName` offset `0`
-- `actions`: `Action`, `BuddyAction`, `CraftAction`, `EventAction`,
-  `GeneralAction`, and `PetAction` offset `0`
-- `commonphrases`: `Completion` offsets `0`, `4`, and `8`
-- `dutynames`: `ContentFinderCondition` offsets `0` and `4`
-- `itemnames`: `Item` offsets `0`, `4`, and `12`
-- `placenames`: `PlaceName` offsets `0`, `4`, and `8`
+- `full` -> all eight text outcomes and `uiAssets` use `ko`
+- `custom` -> all saved outcomes are preserved
+- selecting Full changes effective outcomes without overwriting the Custom draft;
+  selecting Custom restores the draft, including after restart
+- a previously saved `story` profile -> `custom`, with Story `ko` and the other
+  seven text outcomes plus `uiAssets` set to `base`
 
-`Item` offset `8` is the description and intentionally remains on the Korean
-replacement route. The `placenames` group is limited to EXD text routing; it
-does not alter image-based regional titles or map textures handled through
-`TerritoryType`, `CutScreenImage`, or `Map` UI resource paths.
+Old six-key settings remain readable:
 
-`MountAction` and `PvPAction` currently have no string columns in the checked
-2026.05.25 data set, so they are not part of the active verified scope.
+- all six `preserveBase...` values false -> `full`
+- any old value true -> `custom`
+- each old true value -> matching text scope `base`
+- Story and Remainder -> `ko`, preserving the old behavior
+- a missing `uiAssets` key -> `ko`, preserving the old UI-image behavior for
+  Full and Custom
 
-`ENpcResident` is intentionally not included in the original-language options.
-Resident/NPC UI text should continue through the normal Korean patch route.
-
-For Japanese-client output, selected columns stay Japanese. For English-client
-output, selected columns stay English. Item and place-name routing was verified
-separately on English output as described below.
+The next settings save writes only the new format.
+Missing draft keys in older settings initialize the draft from the migrated
+outcomes. Writes use a flushed sibling temporary file and atomic replacement.
+A failed save preserves the previous file and shows a persistent warning; an
+unreadable or malformed settings file fails startup rather than selecting Full.
 
 ## Generator Flags
 
-- `--preserve-base-bnpc-names`
-- `--preserve-base-action-names`
-- `--preserve-base-common-phrases`
-- `--preserve-base-duty-names`
-- `--preserve-base-item-names`
-- `--preserve-base-place-names`
-- `--preserve-base-language-groups <csv>`
+Primary interface:
 
-Legacy `--preserve-base-language-names` maps to `bnpcname` and `actions` only.
-It is kept only for compatibility and does not enable any other group.
+- `--text-profile full|story|custom`
+- `--text-scope-outcomes <csv>` for the eight text scopes in `custom`
+- `--skip-ui-texture-fix` when the independent UI-image outcome is `base`
 
-## Verification Notes
+The image flag does not disable Korean UI text-font repairs. With fonts included,
+Korean Remainder requires the existing PartyMemberList/ContentsFinder/RaidFinder
+ULD corrections even when localized images are disabled. Those corrections
+require neither Korean UI textures nor the global EXD archive.
 
-Use local restore-baseline clean indexes, not the currently patched game folder.
+All eight text outcomes set to Base omit the `0a0000` output/application package.
+UI images and fonts remain independently selectable under the composition
+contract; every WPF composition still includes fonts. Font-only always excludes
+both text and UI packages. Manifests list only selected packages, their original
+indexes, and the version marker, and record the independent `uiAssets` outcome.
 
-Checked on 2026.05.25 `ja` data for the original groups:
+Example:
 
-- Default/off: `BNpcName`, action sheets, `Completion`, and `ENpcResident` use
-  normal Korean replacement routing where Korean rows exist.
-- `--preserve-base-bnpc-names`: `BNpcName` column offset `0` routes to
-  `keep-global`; action sheets and `ENpcResident` remain on normal routing.
-- `--preserve-base-action-names`: action sheet column offset `0` routes to
-  `keep-global`; `BNpcName` and `ENpcResident` remain on normal routing.
-- `--preserve-base-common-phrases`: `Completion` column offsets `0`, `4`, and
-  `8` route to `keep-global`; `BNpcName`, action sheets, and `ENpcResident`
-  remain on normal routing.
+```text
+--text-profile custom --text-scope-outcomes "story=ko,bnpc=base,actions=base,duty=base,item=base,place=base,common=base,remainder=base"
+```
 
-Checked on 2026.08.29 against 2026.08.11 `en` data:
+Custom input requires all eight unique scopes. Missing, duplicate, or unknown
+scopes and unsupported outcomes are errors.
 
-- Default/off: `Item` and `PlaceName` name columns use normal Korean
-  replacement routing.
-- `--preserve-base-item-names`: `Item` offsets `0`, `4`, and `12` route to
-  `keep-global`; description offset `8` remains on normal Korean replacement.
-- `--preserve-base-place-names`: `PlaceName` offsets `0`, `4`, and `8` route to
-  `keep-global`.
+The older `--preserve-base-*`, `--preserve-base-language-groups`, and
+`--preserve-base-language-names` flags remain CLI compatibility inputs. The WPF
+UI no longer emits them.
+
+## Verification
+
+`PatchRouteVerifier` provides:
+
+- `story-text-profile-scopes`
+- `story-instance-content-boundary`
+- `story-sestring-structure`
+- `story-ui-assets`
+- `full-text-output-regression`
+
+Story verification compares base-only cells byte-for-byte with a clean target,
+Korean-selected cells with the Korean source, and structured cells by top-level
+SeString payload type sequence and RSV count. Full regression compares SHA-256
+for every top-level `0a/orig.0a` output file against a known full baseline.
+
+Clean `ja` and `en` baselines must come from separate backups/exports. Installed
+game folders are not valid development generator or verifier inputs.

@@ -11,7 +11,7 @@
 
 - RSV replacement runs after the Korean source string is selected and before the EXD row is serialized.
 - The resolver converts EXD language codes to RSV language IDs: `ja=0`, `en=1`, `de=2`, `fr=3`, `chs=4`, `cht=5`, `ko=6`.
-- Rows or columns intentionally preserved in the base language keep the base-client RSV token.
+- Rows or columns intentionally preserved in the base language keep the base-client RSV token. Text-scope selection takes precedence over replacement and remapping.
 - Diagnostics report resolved and unresolved RSV counts in `patch-diagnostics.tsv`.
 
 ## Kefka greeting
@@ -32,6 +32,7 @@ The route verifier requires:
 - two opening and two closing Icon macros;
 - no flattened ASCII marker;
 - no residual `_rsv_` token;
-- the following Kefka RSV row to remain Korean.
+- Korean-source RSV bytes, resolved using the supplied map.
+- the following Kefka row to match its resolved Korean source, without pinning a dialogue literal.
 
 This verifies generated EXD bytes, not the final battle-dialogue rendering. Client confirmation remains required.

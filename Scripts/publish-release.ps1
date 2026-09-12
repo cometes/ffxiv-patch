@@ -3,6 +3,7 @@ param(
     [string]$ReleaseTitle = "",
     [string]$RemoteName = "origin",
     [string]$BranchName = "main",
+    [string]$ChangesFile = "Docs\RELEASE_CHANGES.md",
     [switch]$Publish,
     [switch]$Draft,
     [switch]$Prerelease,
@@ -61,22 +62,6 @@ function Get-SafeTagPart {
     return $safe.Replace('/', '-').Replace('\', '-')
 }
 
-function Get-PreviousTag {
-    param(
-        [string]$Git,
-        [string]$ExcludeTag = ""
-    )
-
-    $tags = @(& $Git tag --sort=-creatordate)
-    foreach ($tag in $tags) {
-        $trimmed = $tag.Trim()
-        if (![string]::IsNullOrWhiteSpace($trimmed) -and $trimmed -ne $ExcludeTag) {
-            return $trimmed
-        }
-    }
-
-    return ""
-}
 
 function Get-Utf8Text {
     param([string]$Value)
@@ -92,13 +77,12 @@ function Write-ReleaseNotes {
         [string]$Title,
         [string]$ArtifactName,
         [string]$Sha256,
-        [string[]]$Files
+        [string[]]$Files,
+        [string]$Changes,
+        [bool]$Dirty
     )
 
     $commit = (& $Git rev-parse --short HEAD).Trim()
-    $previousTag = Get-PreviousTag $Git -ExcludeTag $Tag
-    $range = if ([string]::IsNullOrWhiteSpace($previousTag)) { "-10" } else { "$previousTag..HEAD" }
-    $changes = & $Git log $range --pretty=format:"- %s (%h)"
 
     $builder = New-Object System.Text.StringBuilder
     [void]$builder.AppendLine("# $Title")
@@ -109,6 +93,9 @@ function Write-ReleaseNotes {
     [void]$builder.AppendLine("- " + (Get-Utf8Text "\uCEE4\uBC0B") + ": ``$commit``")
     [void]$builder.AppendLine("- " + (Get-Utf8Text "\uBC30\uD3EC\u0020\uD30C\uC77C") + ": ``$ArtifactName``")
     [void]$builder.AppendLine("- SHA256: ``$Sha256``")
+    if ($Dirty) {
+        [void]$builder.AppendLine("- Source state: **UNCOMMITTED WORKING TREE - PREPARE ONLY.** The commit above is the base, not the complete artifact source.")
+    }
     [void]$builder.AppendLine()
     [void]$builder.AppendLine("## " + (Get-Utf8Text "\uD3EC\uD568\u0020\uD30C\uC77C"))
     [void]$builder.AppendLine()
@@ -119,14 +106,7 @@ function Write-ReleaseNotes {
     [void]$builder.AppendLine()
     [void]$builder.AppendLine("## " + (Get-Utf8Text "\uBCC0\uACBD\u0020\uC0AC\uD56D"))
     [void]$builder.AppendLine()
-    if ($changes) {
-        foreach ($change in $changes) {
-            [void]$builder.AppendLine($change)
-        }
-    }
-    else {
-        [void]$builder.AppendLine("- " + (Get-Utf8Text "\uBCC0\uACBD\u0020\uC0AC\uD56D\uC744\u0020\uCC3E\uC9C0\u0020\uBABB\uD588\uC2B5\uB2C8\uB2E4\u002E"))
-    }
+    [void]$builder.AppendLine($Changes)
 
     [void]$builder.AppendLine()
     [void]$builder.AppendLine("## " + (Get-Utf8Text "\uBC30\uD3EC\u0020\uC804\u0020\uD655\uC778"))
@@ -151,10 +131,6 @@ $git = Resolve-ToolPath "git" @(
     "C:\Program Files\Git\bin\git.exe"
 )
 
-$gh = Resolve-ToolPath "gh" @(
-    "C:\Program Files\GitHub CLI\gh.exe"
-)
-
 Push-Location $repoRoot
 try {
     if ([string]::IsNullOrWhiteSpace($TagName)) {
@@ -165,8 +141,21 @@ try {
         $ReleaseTitle = (Get-Utf8Text "\u0046\u0046\u0058\u0049\u0056\u0020\uD55C\uAE00\u0020\uD328\uCE58") + " $TagName"
     }
 
-    if (!$AllowDirty -and !(Test-GitClean $git)) {
+    if (!(Test-GitClean $git) -and ($Publish -or !$AllowDirty)) {
         throw "Working tree is not clean. Commit or stash changes first, or pass -AllowDirty for prepare-only runs."
+    }
+
+    $changesPath = if ([System.IO.Path]::IsPathRooted($ChangesFile)) {
+        $ChangesFile
+    } else {
+        Join-Path $repoRoot $ChangesFile
+    }
+    if (!(Test-Path -LiteralPath $changesPath -PathType Leaf)) {
+        throw "Release change list was not found: $changesPath"
+    }
+    $changes = [System.IO.File]::ReadAllText($changesPath, [System.Text.Encoding]::UTF8).Trim()
+    if ([string]::IsNullOrWhiteSpace($changes)) {
+        throw "Release change list is empty: $changesPath"
     }
 
     if (!$SkipBuild) {
@@ -218,21 +207,26 @@ try {
     Set-Content -LiteralPath $shaPath -Value "$($hash.Hash)  $artifactName" -Encoding ASCII
 
     $notesPath = Join-Path $stagingDir "release-notes.md"
-    Write-ReleaseNotes -Path $notesPath -Git $git -Tag $TagName -Title $ReleaseTitle -ArtifactName $artifactName -Sha256 $hash.Hash -Files @($artifactName)
+    Write-ReleaseNotes -Path $notesPath -Git $git -Tag $TagName -Title $ReleaseTitle -ArtifactName $artifactName -Sha256 $hash.Hash -Files @($artifactName) -Changes $changes -Dirty (!(Test-GitClean $git))
 
     Write-Host "Release asset prepared:"
     Write-Host "  Tag:      $TagName"
     Write-Host "  Exe:      $artifactPath"
     Write-Host "  SHA:      $shaPath"
     Write-Host "  Notes:    $notesPath"
+    Write-Host "  Changes:  $changesPath"
 
     if (!$Publish) {
         Write-Host ""
         Write-Host "Prepare-only mode. No git tag or GitHub Release was created."
         Write-Host "To publish:"
-        Write-Host "  .\Scripts\publish-release.ps1 -TagName $TagName -Publish"
+        Write-Host "  .\Scripts\publish-release.ps1 -TagName $TagName -ChangesFile '$($ChangesFile.Replace("'", "''"))' -Publish -Force"
         return
     }
+
+    $gh = Resolve-ToolPath "gh" @(
+        "C:\Program Files\GitHub CLI\gh.exe"
+    )
 
     & $gh auth status | Out-Host
     if ($LASTEXITCODE -ne 0) {

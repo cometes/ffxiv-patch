@@ -1,0 +1,1118 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>텍스트·UI 옵션 목업 5안 · FFXIV 한글 패치</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #090b10;
+      --panel: #11151d;
+      --panel-2: #171c26;
+      --panel-3: #1d2430;
+      --line: #2a3241;
+      --line-strong: #3d485c;
+      --text: #eef1f6;
+      --dim: #a8b0bf;
+      --faint: #747e90;
+      --gold: #e8c886;
+      --gold-2: #b98a42;
+      --gold-soft: rgba(232, 200, 134, 0.12);
+      --blue: #81b6e0;
+      --blue-soft: rgba(129, 182, 224, 0.12);
+      --green: #86c994;
+      --danger: #dd8076;
+      --radius: 14px;
+      --radius-sm: 9px;
+      --shadow: 0 24px 60px rgba(0, 0, 0, 0.32);
+      --mono: "Cascadia Mono", "Consolas", monospace;
+      --sans: "Pretendard", "Noto Sans KR", "Malgun Gothic", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      background:
+        radial-gradient(circle at 12% 0%, rgba(129, 182, 224, 0.08), transparent 28rem),
+        radial-gradient(circle at 88% 12%, rgba(232, 200, 134, 0.08), transparent 30rem),
+        var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      line-height: 1.55;
+    }
+
+    button, input { font: inherit; }
+
+    button {
+      color: inherit;
+      cursor: pointer;
+    }
+
+    button:focus-visible, input:focus-visible + span {
+      outline: 2px solid var(--gold);
+      outline-offset: 3px;
+    }
+
+    .page {
+      width: min(1240px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 48px 0 80px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 28px;
+      align-items: end;
+      padding: 30px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: linear-gradient(135deg, rgba(23, 28, 38, 0.98), rgba(14, 18, 25, 0.96));
+      box-shadow: var(--shadow);
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--gold);
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    h1, h2, h3, p { margin-top: 0; }
+
+    h1 {
+      margin-bottom: 10px;
+      font-size: clamp(28px, 4vw, 44px);
+      line-height: 1.18;
+      letter-spacing: -0.04em;
+    }
+
+    .hero-copy {
+      max-width: 760px;
+      margin: 0;
+      color: var(--dim);
+      font-size: 15px;
+    }
+
+    .invariants {
+      display: grid;
+      gap: 7px;
+      min-width: 250px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      color: var(--dim);
+      font-size: 12px;
+    }
+
+    .invariants li {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .invariants li::before {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      content: "";
+      box-shadow: 0 0 0 4px rgba(134, 201, 148, 0.08);
+    }
+
+    .overview {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+      margin: 18px 0 34px;
+    }
+
+    .overview a {
+      min-height: 112px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(17, 21, 29, 0.88);
+      color: var(--text);
+      text-decoration: none;
+      transition: 150ms ease;
+    }
+
+    .overview a:hover {
+      border-color: var(--line-strong);
+      transform: translateY(-2px);
+      background: var(--panel-2);
+    }
+
+    .overview-index {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--gold);
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .overview strong {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 14px;
+    }
+
+    .overview small {
+      display: block;
+      color: var(--faint);
+      font-size: 11px;
+      line-height: 1.45;
+    }
+
+    .concept {
+      margin-top: 28px;
+      scroll-margin-top: 18px;
+    }
+
+    .concept-heading {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(240px, 420px);
+      gap: 24px;
+      align-items: end;
+      margin: 0 4px 12px;
+    }
+
+    .concept-title-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 5px;
+    }
+
+    .concept-code {
+      display: inline-grid;
+      width: 26px;
+      height: 26px;
+      place-items: center;
+      border: 1px solid var(--gold-2);
+      border-radius: 8px;
+      color: var(--gold);
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .concept h2 {
+      margin: 0;
+      font-size: 21px;
+      letter-spacing: -0.025em;
+    }
+
+    .concept-heading p {
+      margin: 0;
+      color: var(--faint);
+      font-size: 12px;
+    }
+
+    .tradeoff {
+      padding-left: 14px;
+      border-left: 2px solid var(--line-strong);
+    }
+
+    .mock-window {
+      overflow: hidden;
+      border: 1px solid var(--line-strong);
+      border-radius: 18px;
+      background: #0e1219;
+      box-shadow: var(--shadow);
+    }
+
+    .mock-titlebar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      min-height: 42px;
+      padding: 0 16px;
+      border-bottom: 1px solid var(--line);
+      background: #151a23;
+      color: var(--dim);
+      font-size: 11px;
+    }
+
+    .window-dots {
+      display: flex;
+      gap: 6px;
+    }
+
+    .window-dots i {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #313a4a;
+    }
+
+    .mock-body { padding: 20px; }
+
+    .config-bar {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 16px;
+      align-items: center;
+      margin-bottom: 16px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+    }
+
+    .mode-buttons {
+      display: flex;
+      gap: 6px;
+    }
+
+    .mode-button, .small-button {
+      min-height: 34px;
+      padding: 0 14px;
+      border: 1px solid var(--line-strong);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--dim);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .mode-button.is-selected {
+      border-color: var(--gold-2);
+      background: var(--gold-soft);
+      color: var(--gold);
+    }
+
+    .config-summary {
+      min-width: 0;
+    }
+
+    .config-summary strong {
+      display: block;
+      overflow: hidden;
+      color: var(--text);
+      font-size: 13px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .config-summary span {
+      color: var(--faint);
+      font-size: 11px;
+    }
+
+    .font-badge {
+      padding: 7px 10px;
+      border: 1px solid rgba(134, 201, 148, 0.35);
+      border-radius: 999px;
+      background: rgba(134, 201, 148, 0.08);
+      color: var(--green);
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .action-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: stretch;
+      margin-top: 16px;
+    }
+
+    .primary-action {
+      min-height: 52px;
+      padding: 10px 18px;
+      border: 1px solid var(--gold-2);
+      border-radius: var(--radius-sm);
+      background: linear-gradient(135deg, rgba(232, 200, 134, 0.16), rgba(185, 138, 66, 0.05));
+      color: var(--gold);
+      font-weight: 800;
+      text-align: left;
+    }
+
+    .primary-action span {
+      display: block;
+      margin-top: 2px;
+      color: var(--dim);
+      font-size: 10px;
+      font-weight: 500;
+    }
+
+    .secondary-action {
+      min-width: 132px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--panel);
+      color: var(--dim);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .language-ko {
+      color: var(--gold);
+    }
+
+    .language-base {
+      color: var(--blue);
+    }
+
+    /* A. Two-column board */
+    .board-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .board-column {
+      min-height: 244px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+    }
+
+    .board-column[data-outcome="ko"] { border-top-color: var(--gold-2); }
+    .board-column[data-outcome="base"] { border-top-color: #4d7898; }
+
+    .board-heading {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 11px;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .board-count {
+      color: var(--faint);
+      font-family: var(--mono);
+      font-size: 10px;
+    }
+
+    .board-items {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 7px;
+    }
+
+    .board-item {
+      min-height: 46px;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+      color: var(--dim);
+      font-size: 11px;
+      font-weight: 700;
+      text-align: left;
+    }
+
+    .board-item:hover { border-color: var(--line-strong); }
+    .board-column[data-outcome="ko"] .board-item:hover { color: var(--gold); }
+    .board-column[data-outcome="base"] .board-item:hover { color: var(--blue); }
+
+    .board-help {
+      margin: 10px 2px 0;
+      color: var(--faint);
+      font-size: 10px;
+      text-align: center;
+    }
+
+    /* B. Matrix */
+    .matrix {
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+    }
+
+    .matrix-row {
+      display: grid;
+      grid-template-columns: minmax(170px, 1fr) 220px;
+      gap: 16px;
+      align-items: center;
+      min-height: 52px;
+      padding: 8px 12px 8px 16px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .matrix-row:last-child { border-bottom: 0; }
+
+    .scope-label strong {
+      display: block;
+      font-size: 12px;
+    }
+
+    .scope-label span {
+      display: block;
+      margin-top: 1px;
+      color: var(--faint);
+      font-size: 10px;
+    }
+
+    .segment {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      padding: 3px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #0c1016;
+    }
+
+    .segment button {
+      min-height: 31px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--faint);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .segment button[data-value="ko"].is-selected {
+      background: var(--gold-soft);
+      color: var(--gold);
+    }
+
+    .segment button[data-value="base"].is-selected {
+      background: var(--blue-soft);
+      color: var(--blue);
+    }
+
+    /* C. Grouped cards */
+    .group-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .scope-group {
+      padding: 13px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+    }
+
+    .scope-group h3 {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 9px;
+      color: var(--dim);
+      font-size: 12px;
+    }
+
+    .scope-group h3 span {
+      color: var(--faint);
+      font-family: var(--mono);
+      font-size: 9px;
+      font-weight: 500;
+    }
+
+    .group-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 92px;
+      gap: 8px;
+      align-items: center;
+      min-height: 38px;
+      padding: 5px 0;
+      border-top: 1px solid rgba(42, 50, 65, 0.75);
+    }
+
+    .group-row:first-of-type { border-top: 0; }
+
+    .group-row strong {
+      overflow: hidden;
+      font-size: 11px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .language-toggle {
+      min-height: 29px;
+      border: 1px solid var(--line-strong);
+      border-radius: 7px;
+      background: var(--panel-2);
+      font-size: 10px;
+      font-weight: 800;
+    }
+
+    .language-toggle[data-current="ko"] {
+      border-color: rgba(185, 138, 66, 0.65);
+      color: var(--gold);
+    }
+
+    .language-toggle[data-current="base"] {
+      border-color: rgba(77, 120, 152, 0.65);
+      color: var(--blue);
+    }
+
+    /* D. Checklist */
+    .checklist-shell {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 280px;
+      gap: 14px;
+    }
+
+    .checklist {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 7px;
+      margin: 0;
+      padding: 13px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+    }
+
+    .checklist legend {
+      padding: 0 6px;
+      color: var(--dim);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .check-item {
+      position: relative;
+      display: flex;
+      gap: 9px;
+      align-items: center;
+      min-height: 40px;
+      padding: 7px 9px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      color: var(--dim);
+      cursor: pointer;
+      font-size: 11px;
+    }
+
+    .check-item:hover {
+      border-color: var(--line);
+      background: var(--panel-2);
+    }
+
+    .check-item input {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .check-box {
+      display: inline-grid;
+      flex: 0 0 20px;
+      width: 20px;
+      height: 20px;
+      place-items: center;
+      border: 1px solid var(--line-strong);
+      border-radius: 6px;
+      color: transparent;
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .check-item input:checked + .check-box {
+      border-color: #4d7898;
+      background: var(--blue-soft);
+      color: var(--blue);
+    }
+
+    .checklist-summary {
+      display: grid;
+      align-content: center;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: linear-gradient(145deg, var(--panel-2), var(--panel));
+    }
+
+    .checklist-summary small {
+      color: var(--faint);
+      font-family: var(--mono);
+      font-size: 10px;
+    }
+
+    .checklist-summary strong {
+      margin: 4px 0;
+      color: var(--blue);
+      font-size: 26px;
+      line-height: 1.2;
+    }
+
+    .checklist-summary span {
+      color: var(--dim);
+      font-size: 11px;
+    }
+
+    /* E. Summary drawer */
+    .summary-hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 20px;
+      align-items: center;
+      padding: 22px;
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius);
+      background:
+        linear-gradient(135deg, rgba(232, 200, 134, 0.1), transparent 58%),
+        var(--panel);
+    }
+
+    .summary-hero small {
+      color: var(--gold);
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .summary-hero h3 {
+      margin: 5px 0 6px;
+      font-size: 24px;
+      letter-spacing: -0.035em;
+    }
+
+    .summary-hero p {
+      margin: 0;
+      color: var(--dim);
+      font-size: 12px;
+    }
+
+    .drawer-toggle {
+      min-width: 144px;
+      min-height: 42px;
+      border: 1px solid var(--line-strong);
+      border-radius: 9px;
+      background: var(--panel-2);
+      color: var(--text);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .drawer {
+      margin-top: 9px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+    }
+
+    .drawer[hidden] { display: none; }
+
+    .drawer-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 7px;
+    }
+
+    .drawer-option {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      min-height: 40px;
+      padding: 7px 9px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+    }
+
+    .drawer-option span { font-size: 10px; }
+
+    .drawer-option button {
+      min-width: 52px;
+      min-height: 26px;
+      border: 1px solid var(--line-strong);
+      border-radius: 999px;
+      background: transparent;
+      font-size: 9px;
+      font-weight: 800;
+    }
+
+    .drawer-option button[data-current="ko"] { color: var(--gold); }
+    .drawer-option button[data-current="base"] { color: var(--blue); }
+
+    .global-status {
+      position: sticky;
+      bottom: 16px;
+      z-index: 10;
+      width: fit-content;
+      max-width: calc(100% - 24px);
+      margin: 24px auto 0;
+      padding: 9px 14px;
+      border: 1px solid var(--line-strong);
+      border-radius: 999px;
+      background: rgba(17, 21, 29, 0.94);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+      color: var(--dim);
+      font-size: 11px;
+      backdrop-filter: blur(10px);
+    }
+
+    @media (max-width: 1040px) {
+      .overview { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .drawer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 760px) {
+      .page {
+        width: min(100% - 24px, 620px);
+        padding-top: 20px;
+      }
+
+      .hero, .concept-heading {
+        grid-template-columns: 1fr;
+      }
+
+      .hero { padding: 22px; }
+      .invariants { min-width: 0; }
+      .overview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .concept-heading { gap: 6px; }
+      .tradeoff { padding-left: 10px; }
+
+      .mock-body { padding: 12px; }
+      .config-bar {
+        grid-template-columns: 1fr auto;
+        gap: 10px;
+      }
+      .config-summary {
+        grid-column: 1 / -1;
+        grid-row: 2;
+      }
+      .font-badge {
+        grid-column: 2;
+        grid-row: 1;
+      }
+
+      .board-grid, .group-grid, .checklist-shell {
+        grid-template-columns: 1fr;
+      }
+      .board-column { min-height: 0; }
+      .board-items { grid-template-columns: 1fr; }
+      .matrix-row { grid-template-columns: 1fr; gap: 7px; }
+      .checklist { grid-template-columns: 1fr; }
+      .drawer-grid { grid-template-columns: 1fr; }
+      .summary-hero { grid-template-columns: 1fr; }
+      .drawer-toggle { width: 100%; }
+      .action-row { grid-template-columns: 1fr; }
+      .secondary-action { min-height: 42px; }
+    }
+
+    @media (max-width: 460px) {
+      .overview { grid-template-columns: 1fr; }
+      .mode-buttons { width: 100%; }
+      .mode-button { flex: 1; padding-inline: 10px; }
+      .font-badge { font-size: 9px; }
+      .summary-hero h3 { font-size: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">UI comparison gallery</p>
+        <h1>텍스트·UI 옵션 목업 5안</h1>
+        <p class="hero-copy">기능은 같고 정보 구조만 다릅니다. 한 목업에서 값을 바꾸면 나머지 네 목업도 같은 결과로 동기화되어 바로 비교할 수 있습니다.</p>
+      </div>
+      <ul class="invariants" aria-label="공통 조건">
+        <li>스토리 전용 프리셋 버튼 없음</li>
+        <li>텍스트 8개 + UI 이미지 1개</li>
+        <li>한글 폰트 항상 포함</li>
+        <li>메인 동작은 선택 구성 패치 하나</li>
+      </ul>
+    </header>
+
+    <nav class="overview" aria-label="목업 바로가기">
+      <a href="#board"><span class="overview-index">A / CLEAR RESULT</span><strong>2열 결과 보드</strong><small>한국어와 원문 결과를 공간으로 분리</small></a>
+      <a href="#matrix"><span class="overview-index">B / STANDARD</span><strong>행렬형 선택표</strong><small>행마다 두 결과를 명시적으로 표시</small></a>
+      <a href="#groups"><span class="overview-index">C / CONTEXT</span><strong>범주별 카드</strong><small>연관 옵션을 의미 단위로 묶기</small></a>
+      <a href="#checklist"><span class="overview-index">D / COMPACT</span><strong>컴팩트 체크리스트</strong><small>원문 유지 항목만 빠르게 체크</small></a>
+      <a href="#drawer"><span class="overview-index">E / QUIET</span><strong>요약 중심 드로어</strong><small>평소에는 결과 요약만 노출</small></a>
+    </nav>
+
+    <section class="concept" id="board">
+      <div class="concept-heading">
+        <div>
+          <div class="concept-title-row"><span class="concept-code">A</span><h2>2열 결과 보드</h2></div>
+          <p>각 항목을 누르면 반대 결과 칸으로 이동합니다.</p>
+        </div>
+        <p class="tradeoff">현재 결과를 가장 빠르게 읽을 수 있습니다. 대신 일반 설정 화면보다 보드형 상호작용에 익숙해져야 합니다.</p>
+      </div>
+      <article class="mock-window" data-mockup="board">
+        <div class="mock-titlebar"><span>FFXIV 한글 패치 · 구성 비교 A</span><span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span></div>
+        <div class="mock-body">
+          <div class="config-bar" data-shared-header></div>
+          <div class="board-grid">
+            <section class="board-column" data-outcome="ko">
+              <div class="board-heading"><span class="language-ko">한국어 적용</span><span class="board-count" data-board-count="ko"></span></div>
+              <div class="board-items" data-board-items="ko"></div>
+            </section>
+            <section class="board-column" data-outcome="base">
+              <div class="board-heading"><span class="language-base">원문 유지</span><span class="board-count" data-board-count="base"></span></div>
+              <div class="board-items" data-board-items="base"></div>
+            </section>
+          </div>
+          <p class="board-help">항목 클릭 시 반대 칸으로 이동 · 드래그 없이 키보드 조작 가능</p>
+          <div class="action-row" data-shared-actions></div>
+        </div>
+      </article>
+    </section>
+
+    <section class="concept" id="matrix">
+      <div class="concept-heading">
+        <div>
+          <div class="concept-title-row"><span class="concept-code">B</span><h2>행렬형 선택표</h2></div>
+          <p>모든 항목과 두 결과를 같은 행에서 비교합니다.</p>
+        </div>
+        <p class="tradeoff">가장 익숙하고 오조작이 적습니다. 항목이 늘어나면 세로 길이가 빠르게 증가합니다.</p>
+      </div>
+      <article class="mock-window" data-mockup="matrix">
+        <div class="mock-titlebar"><span>FFXIV 한글 패치 · 구성 비교 B</span><span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span></div>
+        <div class="mock-body">
+          <div class="config-bar" data-shared-header></div>
+          <div class="matrix" data-matrix></div>
+          <div class="action-row" data-shared-actions></div>
+        </div>
+      </article>
+    </section>
+
+    <section class="concept" id="groups">
+      <div class="concept-heading">
+        <div>
+          <div class="concept-title-row"><span class="concept-code">C</span><h2>범주별 카드</h2></div>
+          <p>스토리·전투·명칭·시스템/UI 맥락으로 나눕니다.</p>
+        </div>
+        <p class="tradeoff">각 옵션의 의미를 설명하기 좋습니다. 사용자가 원하는 항목이 어느 그룹인지 한 번 판단해야 합니다.</p>
+      </div>
+      <article class="mock-window" data-mockup="groups">
+        <div class="mock-titlebar"><span>FFXIV 한글 패치 · 구성 비교 C</span><span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span></div>
+        <div class="mock-body">
+          <div class="config-bar" data-shared-header></div>
+          <div class="group-grid" data-groups></div>
+          <div class="action-row" data-shared-actions></div>
+        </div>
+      </article>
+    </section>
+
+    <section class="concept" id="checklist">
+      <div class="concept-heading">
+        <div>
+          <div class="concept-title-row"><span class="concept-code">D</span><h2>컴팩트 체크리스트</h2></div>
+          <p>원문으로 남길 항목만 체크합니다.</p>
+        </div>
+        <p class="tradeoff">작고 빠릅니다. 체크 해제의 의미를 읽어야 하므로 두 결과를 나란히 보여주는 안보다 처음 이해하기 어렵습니다.</p>
+      </div>
+      <article class="mock-window" data-mockup="checklist">
+        <div class="mock-titlebar"><span>FFXIV 한글 패치 · 구성 비교 D</span><span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span></div>
+        <div class="mock-body">
+          <div class="config-bar" data-shared-header></div>
+          <div class="checklist-shell">
+            <fieldset class="checklist" data-checklist><legend>원문으로 유지할 항목</legend></fieldset>
+            <aside class="checklist-summary"><small>BASE LANGUAGE</small><strong data-base-count></strong><span>체크한 항목은 선택한 글로벌 클라이언트 언어로 유지됩니다.</span></aside>
+          </div>
+          <div class="action-row" data-shared-actions></div>
+        </div>
+      </article>
+    </section>
+
+    <section class="concept" id="drawer">
+      <div class="concept-heading">
+        <div>
+          <div class="concept-title-row"><span class="concept-code">E</span><h2>요약 중심 드로어</h2></div>
+          <p>메인 화면에는 결과 요약만 두고 옵션은 펼쳐서 수정합니다.</p>
+        </div>
+        <p class="tradeoff">평소 화면이 가장 조용합니다. 세부 결과를 확인하거나 바꿀 때 한 번 더 눌러야 합니다.</p>
+      </div>
+      <article class="mock-window" data-mockup="drawer">
+        <div class="mock-titlebar"><span>FFXIV 한글 패치 · 구성 비교 E</span><span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span></div>
+        <div class="mock-body">
+          <div class="config-bar" data-shared-header></div>
+          <section class="summary-hero">
+            <div>
+              <small>CURRENT COMPOSITION</small>
+              <h3 data-drawer-count></h3>
+              <p data-drawer-summary></p>
+            </div>
+            <button class="drawer-toggle" type="button" aria-expanded="false" data-drawer-toggle>세부 설정 펼치기</button>
+          </section>
+          <div class="drawer" data-drawer hidden><div class="drawer-grid" data-drawer-grid></div></div>
+          <div class="action-row" data-shared-actions></div>
+        </div>
+      </article>
+    </section>
+
+    <p class="global-status" id="gallery-status" aria-live="polite">초기 비교 상태 · 한국어 1개 · 원문 8개</p>
+  </main>
+
+  <script>
+    const scopes = [
+      { id: "story", label: "임무 중 대사·목표", short: "스토리·대사", description: "퀘스트와 임무 중 대사·목표" },
+      { id: "bnpc", label: "몬스터·NPC 이름", short: "NPC 이름", description: "전투 대상과 NPC 이름" },
+      { id: "actions", label: "기술 이름", short: "기술 이름", description: "전투·제작·소환수 기술" },
+      { id: "duty", label: "임무 이름", short: "임무 이름", description: "던전·토벌전·레이드 이름" },
+      { id: "item", label: "아이템 이름", short: "아이템", description: "아이템명과 관련 명칭" },
+      { id: "place", label: "지역 이름", short: "지역 이름", description: "필드·도시·구역 이름" },
+      { id: "common", label: "상용구", short: "상용구", description: "자동 번역 상용구" },
+      { id: "remainder", label: "기타 UI·시스템", short: "기타 UI", description: "그 외 게임 텍스트" },
+      { id: "uiAssets", label: "UI 이미지", short: "UI 이미지", description: "지도·로딩·지역 타이틀 이미지" }
+    ];
+
+    const groups = [
+      { name: "스토리", note: "1개", ids: ["story"] },
+      { name: "전투·콘텐츠", note: "3개", ids: ["bnpc", "actions", "duty"] },
+      { name: "명칭·상용구", note: "3개", ids: ["item", "place", "common"] },
+      { name: "시스템·이미지", note: "2개", ids: ["remainder", "uiAssets"] }
+    ];
+
+    const initialValues = Object.fromEntries(scopes.map((scope) => [scope.id, scope.id === "story" ? "ko" : "base"]));
+    let values = { ...initialValues };
+    let mode = "custom";
+    let drawerExpanded = false;
+
+    const scopeById = Object.fromEntries(scopes.map((scope) => [scope.id, scope]));
+    const status = document.getElementById("gallery-status");
+
+    function counts() {
+      const ko = scopes.filter((scope) => values[scope.id] === "ko").length;
+      return { ko, base: scopes.length - ko };
+    }
+
+    function setMode(nextMode) {
+      mode = nextMode === "full" ? "full" : "custom";
+      if (mode === "full") {
+        values = Object.fromEntries(scopes.map((scope) => [scope.id, "ko"]));
+      }
+      render();
+    }
+
+    function setOutcome(scopeId, outcome) {
+      values[scopeId] = outcome;
+      mode = "custom";
+      render();
+    }
+
+    function toggleOutcome(scopeId) {
+      setOutcome(scopeId, values[scopeId] === "ko" ? "base" : "ko");
+    }
+
+    function headerMarkup() {
+      const count = counts();
+      return `
+        <div class="mode-buttons" role="group" aria-label="구성 방식">
+          <button class="mode-button ${mode === "full" ? "is-selected" : ""}" type="button" data-set-mode="full" aria-pressed="${mode === "full"}">전체 한글</button>
+          <button class="mode-button ${mode === "custom" ? "is-selected" : ""}" type="button" data-set-mode="custom" aria-pressed="${mode === "custom"}">직접 설정</button>
+        </div>
+        <div class="config-summary"><strong>한국어 ${count.ko}개 · 원문 ${count.base}개</strong><span>텍스트 8개 범위 + UI 이미지</span></div>
+        <span class="font-badge">한글 폰트 항상 포함</span>`;
+    }
+
+    function actionsMarkup() {
+      return `<button class="primary-action" type="button" data-primary-action>선택 구성 패치<span>현재 9개 결과와 한글 폰트를 적용</span></button><button class="secondary-action" type="button" data-font-action>폰트만 패치</button>`;
+    }
+
+    function renderBoard() {
+      for (const outcome of ["ko", "base"]) {
+        const selected = scopes.filter((scope) => values[scope.id] === outcome);
+        document.querySelector('[data-board-count="' + outcome + '"]').textContent = selected.length + " / 9";
+        document.querySelector('[data-board-items="' + outcome + '"]').innerHTML = selected.map((scope) =>
+          `<button class="board-item" type="button" data-board-scope="${scope.id}" title="반대 결과로 이동">${scope.label}</button>`
+        ).join("");
+      }
+    }
+
+    function segmentMarkup(scope, location) {
+      return `<div class="segment" role="group" aria-label="${scope.label} 결과">
+        <button type="button" data-segment-scope="${scope.id}" data-value="ko" data-location="${location}" class="${values[scope.id] === "ko" ? "is-selected" : ""}" aria-pressed="${values[scope.id] === "ko"}">한국어</button>
+        <button type="button" data-segment-scope="${scope.id}" data-value="base" data-location="${location}" class="${values[scope.id] === "base" ? "is-selected" : ""}" aria-pressed="${values[scope.id] === "base"}">원문</button>
+      </div>`;
+    }
+
+    function renderMatrix() {
+      document.querySelector("[data-matrix]").innerHTML = scopes.map((scope) => `
+        <div class="matrix-row">
+          <div class="scope-label"><strong>${scope.label}</strong><span>${scope.description}</span></div>
+          ${segmentMarkup(scope, "matrix")}
+        </div>`).join("");
+    }
+
+    function renderGroups() {
+      document.querySelector("[data-groups]").innerHTML = groups.map((group) => `
+        <section class="scope-group">
+          <h3>${group.name}<span>${group.note}</span></h3>
+          ${group.ids.map((id) => {
+            const scope = scopeById[id];
+            const current = values[id];
+            return `<div class="group-row"><strong title="${scope.label}">${scope.label}</strong><button class="language-toggle" type="button" data-group-scope="${id}" data-current="${current}">${current === "ko" ? "한국어" : "원문"}</button></div>`;
+          }).join("")}
+        </section>`).join("");
+    }
+
+    function renderChecklist() {
+      document.querySelector("[data-checklist]").innerHTML = `<legend>원문으로 유지할 항목</legend>` + scopes.map((scope) => `
+        <label class="check-item"><input type="checkbox" data-check-scope="${scope.id}" ${values[scope.id] === "base" ? "checked" : ""}><span class="check-box">✓</span><span>${scope.label}</span></label>`).join("");
+      document.querySelector("[data-base-count]").textContent = counts().base + "개 원문";
+    }
+
+    function renderDrawer() {
+      const count = counts();
+      document.querySelector("[data-drawer-count]").textContent = `한국어 ${count.ko} · 원문 ${count.base}`;
+      const koLabels = scopes.filter((scope) => values[scope.id] === "ko").map((scope) => scope.short).join(" · ") || "한국어 적용 없음";
+      document.querySelector("[data-drawer-summary]").textContent = "한국어: " + koLabels + " · 나머지는 원문 유지";
+      const drawer = document.querySelector("[data-drawer]");
+      drawer.hidden = !drawerExpanded;
+      const toggle = document.querySelector("[data-drawer-toggle]");
+      toggle.setAttribute("aria-expanded", String(drawerExpanded));
+      toggle.textContent = drawerExpanded ? "세부 설정 접기" : "세부 설정 펼치기";
+      document.querySelector("[data-drawer-grid]").innerHTML = scopes.map((scope) => {
+        const current = values[scope.id];
+        return `<div class="drawer-option"><span>${scope.short}</span><button type="button" data-drawer-scope="${scope.id}" data-current="${current}">${current === "ko" ? "한국어" : "원문"}</button></div>`;
+      }).join("");
+    }
+
+    function bindInteractions() {
+      document.querySelectorAll("[data-set-mode]").forEach((button) => button.addEventListener("click", () => setMode(button.dataset.setMode)));
+      document.querySelectorAll("[data-board-scope]").forEach((button) => button.addEventListener("click", () => toggleOutcome(button.dataset.boardScope)));
+      document.querySelectorAll("[data-segment-scope]").forEach((button) => button.addEventListener("click", () => setOutcome(button.dataset.segmentScope, button.dataset.value)));
+      document.querySelectorAll("[data-group-scope]").forEach((button) => button.addEventListener("click", () => toggleOutcome(button.dataset.groupScope)));
+      document.querySelectorAll("[data-check-scope]").forEach((input) => input.addEventListener("change", () => setOutcome(input.dataset.checkScope, input.checked ? "base" : "ko")));
+      document.querySelectorAll("[data-drawer-scope]").forEach((button) => button.addEventListener("click", () => toggleOutcome(button.dataset.drawerScope)));
+      document.querySelectorAll("[data-primary-action]").forEach((button) => button.addEventListener("click", () => {
+        const count = counts();
+        status.textContent = `선택 구성 패치는 목업에서 실행되지 않습니다 · 한국어 ${count.ko}개 · 원문 ${count.base}개`;
+      }));
+      document.querySelectorAll("[data-font-action]").forEach((button) => button.addEventListener("click", () => {
+        status.textContent = "폰트만 패치는 목업에서 실행되지 않습니다.";
+      }));
+      document.querySelector("[data-drawer-toggle]").addEventListener("click", () => {
+        drawerExpanded = !drawerExpanded;
+        render();
+      });
+    }
+
+    function render() {
+      document.querySelectorAll("[data-shared-header]").forEach((element) => { element.innerHTML = headerMarkup(); });
+      document.querySelectorAll("[data-shared-actions]").forEach((element) => { element.innerHTML = actionsMarkup(); });
+      renderBoard();
+      renderMatrix();
+      renderGroups();
+      renderChecklist();
+      renderDrawer();
+      const count = counts();
+      status.textContent = `모든 목업 동기화됨 · 한국어 ${count.ko}개 · 원문 ${count.base}개`;
+      bindInteractions();
+    }
+
+    render();
+  </script>
+</body>
+</html>
