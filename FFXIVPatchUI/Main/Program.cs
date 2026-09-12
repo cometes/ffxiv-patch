@@ -16,9 +16,24 @@ namespace FFXIVKoreanPatch.Main
             System.Windows.Application app = new System.Windows.Application();
             app.ShutdownMode = System.Windows.ShutdownMode.OnMainWindowClose;
 
-            MainWindow view = new MainWindow();
-            PatchController controller = new PatchController(view);
-            view.AttachController(controller);
+            MainWindow view;
+            try
+            {
+                view = new MainWindow();
+                PatchController controller = new PatchController(view);
+                view.AttachController(controller);
+            }
+            catch (Exception exception)
+            {
+                System.Windows.MessageBox.Show(
+                    "초기화에 실패하여 클라이언트 파일을 변경하지 않았습니다." + Environment.NewLine +
+                    exception.Message,
+                    "FFXIV 한글 패치 초기화 오류",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Error);
+                app.Shutdown(1);
+                return;
+            }
 
             app.Run(view.Window);
         }

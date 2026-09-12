@@ -154,6 +154,7 @@ namespace FFXIVKoreanPatch.Main
         private static readonly string[] outcomeSettingKeys =
             { "story", "bnpc", "actions", "duty", "item", "place", "common", "remainder", "uiAssets" };
         private bool[] customDraft = new bool[9];
+        private string settingsWarning;
 
         // Output directory used when generating release files locally.
         private string releaseOutputDir = string.Empty;
@@ -187,8 +188,20 @@ namespace FFXIVKoreanPatch.Main
         public PatchController(MainWindow view)
         {
             this.view = view;
-            LoadTextConfigurationSettings();
-            customDraft = GetScopeOutcomes();
+            try
+            {
+                LoadTextConfigurationSettings();
+            }
+            catch (Exception exception) when (exception is IOException ||
+                                              exception is UnauthorizedAccessException ||
+                                              exception is System.Security.SecurityException ||
+                                              exception is FormatException)
+            {
+                throw new InvalidOperationException(
+                    "패치 설정을 읽을 수 없어 시작하지 않았습니다. patch-options.txt의 접근 권한과 잠금을 확인하고, " +
+                    "설정 값(targetLanguage=ja 또는 en, 결과=ko 또는 base)을 수정하거나 파일을 별도로 보관한 뒤 다시 실행해주세요." +
+                    Environment.NewLine + exception.Message, exception);
+            }
         }
 
         public int TargetLanguageIndex
@@ -313,7 +326,7 @@ namespace FFXIVKoreanPatch.Main
             view.RunOnUi(() =>
             {
                 initialCheckBusy = false;
-                view.ApplyDashboard(new DashboardState { ControlsEnabled = !IsWorkActive });
+                view.ApplyDashboard(new DashboardState { ControlsEnabled = !IsWorkActive, SettingsWarning = settingsWarning });
                 view.CloseView();
             });
         }
@@ -681,6 +694,7 @@ namespace FFXIVKoreanPatch.Main
 
             DashboardState state = new DashboardState();
             state.ControlsEnabled = enabled;
+            state.SettingsWarning = settingsWarning;
             state.State = DetectClientPatchState();
             state.StateDetail = string.IsNullOrEmpty(targetVersion) ? null : "클라이언트 " + targetVersion;
 
@@ -882,165 +896,96 @@ namespace FFXIVKoreanPatch.Main
 
         private void LoadTextConfigurationSettings()
         {
-            string loadedProfile = null;
-            bool hasNewScopeOutcomes = false;
-            bool legacyBnpc = false;
-            bool legacyActions = false;
-            bool legacyCommon = false;
-            bool legacyDuty = false;
-            bool legacyItem = false;
-            bool legacyPlace = false;
-            bool? story = null;
-            bool? bnpc = null;
-            bool? actions = null;
-            bool? duty = null;
-            bool? item = null;
-            bool? place = null;
-            bool? common = null;
-            bool? remainder = null;
-            bool? uiAssets = null;
-
             string path = GetPatchOptionSettingsPath();
-            if (File.Exists(path))
+            string[] lines;
+            try
             {
-                foreach (string line in File.ReadAllLines(path))
+                // File.Exists hides access errors. Only an absent file is a default configuration.
+                lines = File.ReadAllLines(path);
+            }
+            catch (FileNotFoundException)
+            {
+                return;
+            }
+
+            var settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string line in lines)
+            {
+                string trimmed = line.Trim();
+                if (trimmed.Length == 0 || trimmed.StartsWith("#", StringComparison.Ordinal)) continue;
+                int equals = trimmed.IndexOf('=');
+                if (equals <= 0)
+                    throw new FormatException(path + ": 잘못된 설정 줄: " + trimmed);
+                string key = trimmed.Substring(0, equals).Trim();
+                if (settings.ContainsKey(key))
+                    throw new FormatException(path + ": 중복 설정: " + key);
+                settings.Add(key, trimmed.Substring(equals + 1).Trim());
+            }
+
+            string value;
+            if (settings.TryGetValue("targetLanguage", out value))
+            {
+                if (!string.Equals(value, "ja", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(value, "en", StringComparison.OrdinalIgnoreCase))
+                    throw new FormatException(path + ": targetLanguage는 ja 또는 en이어야 합니다.");
+                targetLanguageCode = value.ToLowerInvariant();
+                targetLanguageDisplayName = targetLanguageCode == "en" ? "영어" : "일본어";
+            }
+
+            string loadedProfile;
+            settings.TryGetValue("textProfile", out loadedProfile);
+            if (loadedProfile != null &&
+                !string.Equals(loadedProfile, "full", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(loadedProfile, "custom", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(loadedProfile, "story", StringComparison.OrdinalIgnoreCase))
+                throw new FormatException(path + ": textProfile은 full 또는 custom이어야 합니다.");
+
+            string[] legacyKeys =
+            {
+                null, "preserveBaseBnpcNames", "preserveBaseActionNames", "preserveBaseDutyNames",
+                "preserveBaseItemNames", "preserveBasePlaceNames", "preserveBaseCommonPhrases", null, null
+            };
+            bool[] outcomes = new bool[9];
+            bool hasScopeOutcomes = false;
+            for (int i = 0; i < outcomes.Length; i++)
+            {
+                if (legacyKeys[i] != null && settings.TryGetValue(legacyKeys[i], out value))
                 {
-                    string trimmed = (line ?? string.Empty).Trim();
-                    if (trimmed.Length == 0 || trimmed.StartsWith("#", StringComparison.Ordinal))
-                    {
-                        continue;
-                    }
-
-                    int equals = trimmed.IndexOf('=');
-                    if (equals <= 0)
-                    {
-                        continue;
-                    }
-
-                    string key = trimmed.Substring(0, equals).Trim();
-                    string value = trimmed.Substring(equals + 1).Trim();
-                    bool parsedOutcome;
-                    if (string.Equals(key, "textProfile", StringComparison.OrdinalIgnoreCase))
-                    {
-                        loadedProfile = value;
-                    }
-                    else if (string.Equals(key, "story", StringComparison.OrdinalIgnoreCase) &&
-                             TryParseScopeOutcome(value, out parsedOutcome))
-                    {
-                        story = parsedOutcome;
-                        hasNewScopeOutcomes = true;
-                    }
-                    else if (string.Equals(key, "bnpc", StringComparison.OrdinalIgnoreCase) &&
-                             TryParseScopeOutcome(value, out parsedOutcome))
-                    {
-                        bnpc = parsedOutcome;
-                        hasNewScopeOutcomes = true;
-                    }
-                    else if (string.Equals(key, "actions", StringComparison.OrdinalIgnoreCase) &&
-                             TryParseScopeOutcome(value, out parsedOutcome))
-                    {
-                        actions = parsedOutcome;
-                        hasNewScopeOutcomes = true;
-                    }
-                    else if (string.Equals(key, "duty", StringComparison.OrdinalIgnoreCase) &&
-                             TryParseScopeOutcome(value, out parsedOutcome))
-                    {
-                        duty = parsedOutcome;
-                        hasNewScopeOutcomes = true;
-                    }
-                    else if (string.Equals(key, "item", StringComparison.OrdinalIgnoreCase) &&
-                             TryParseScopeOutcome(value, out parsedOutcome))
-                    {
-                        item = parsedOutcome;
-                        hasNewScopeOutcomes = true;
-                    }
-                    else if (string.Equals(key, "place", StringComparison.OrdinalIgnoreCase) &&
-                             TryParseScopeOutcome(value, out parsedOutcome))
-                    {
-                        place = parsedOutcome;
-                        hasNewScopeOutcomes = true;
-                    }
-                    else if (string.Equals(key, "common", StringComparison.OrdinalIgnoreCase) &&
-                             TryParseScopeOutcome(value, out parsedOutcome))
-                    {
-                        common = parsedOutcome;
-                        hasNewScopeOutcomes = true;
-                    }
-                    else if (string.Equals(key, "remainder", StringComparison.OrdinalIgnoreCase) &&
-                             TryParseScopeOutcome(value, out parsedOutcome))
-                    {
-                        remainder = parsedOutcome;
-                        hasNewScopeOutcomes = true;
-                    }
-                    else if (string.Equals(key, "uiAssets", StringComparison.OrdinalIgnoreCase) &&
-                             TryParseScopeOutcome(value, out parsedOutcome))
-                    {
-                        uiAssets = parsedOutcome;
-                        hasNewScopeOutcomes = true;
-                    }
-                    else
-                    {
-                        bool enabled = IsEnabledSettingValue(value);
-                        if (string.Equals(key, "preserveBaseBnpcNames", StringComparison.OrdinalIgnoreCase))
-                        {
-                            legacyBnpc = enabled;
-                        }
-                        else if (string.Equals(key, "preserveBaseActionNames", StringComparison.OrdinalIgnoreCase))
-                        {
-                            legacyActions = enabled;
-                        }
-                        else if (string.Equals(key, "preserveBaseCommonPhrases", StringComparison.OrdinalIgnoreCase))
-                        {
-                            legacyCommon = enabled;
-                        }
-                        else if (string.Equals(key, "preserveBaseDutyNames", StringComparison.OrdinalIgnoreCase))
-                        {
-                            legacyDuty = enabled;
-                        }
-                        else if (string.Equals(key, "preserveBaseItemNames", StringComparison.OrdinalIgnoreCase))
-                        {
-                            legacyItem = enabled;
-                        }
-                        else if (string.Equals(key, "preserveBasePlaceNames", StringComparison.OrdinalIgnoreCase))
-                        {
-                            legacyPlace = enabled;
-                        }
-                    }
+                    if (!IsEnabledSettingValue(value) &&
+                        !string.Equals(value, "false", StringComparison.OrdinalIgnoreCase) &&
+                        !string.Equals(value, "0", StringComparison.OrdinalIgnoreCase) &&
+                        !string.Equals(value, "no", StringComparison.OrdinalIgnoreCase))
+                        throw new FormatException(path + ": 잘못된 설정: " + legacyKeys[i]);
+                    outcomes[i] = IsEnabledSettingValue(value);
+                }
+                if (settings.TryGetValue(outcomeSettingKeys[i], out value))
+                {
+                    if (!TryParseScopeOutcome(value, out outcomes[i]))
+                        throw new FormatException(path + ": 결과는 ko 또는 base이어야 합니다: " + outcomeSettingKeys[i]);
+                    hasScopeOutcomes = true;
                 }
             }
 
-            bool migrateStoryProfileToCustom =
-                string.Equals(loadedProfile, "story", StringComparison.OrdinalIgnoreCase);
+            bool migrateStory = string.Equals(loadedProfile, "story", StringComparison.OrdinalIgnoreCase);
+            textProfile = loadedProfile == null
+                ? (hasScopeOutcomes || outcomes.Any(outcome => outcome) ? "custom" : "full")
+                : (migrateStory ? "custom" : NormalizeTextProfile(loadedProfile));
+            ApplyScopeOutcomes(outcomes);
+            if (migrateStory) ApplyStoryTextProfileDefaults();
+            customDraft = GetScopeOutcomes();
 
-            if (loadedProfile == null)
+            bool hasDraft = outcomeSettingKeys.Any(key => settings.ContainsKey("custom." + key));
+            if (hasDraft && !migrateStory)
             {
-                bool anyLegacyPreserve = legacyBnpc || legacyActions || legacyCommon ||
-                                         legacyDuty || legacyItem || legacyPlace;
-                textProfile = hasNewScopeOutcomes || anyLegacyPreserve ? "custom" : "full";
+                for (int i = 0; i < customDraft.Length; i++)
+                {
+                    string key = "custom." + outcomeSettingKeys[i];
+                    if (!settings.TryGetValue(key, out value) || !TryParseScopeOutcome(value, out customDraft[i]))
+                        throw new FormatException(path + ": 직접 설정 초안의 결과가 없거나 잘못되었습니다: " + key);
+                }
             }
-            else
-            {
-                textProfile = migrateStoryProfileToCustom ? "custom" : NormalizeTextProfile(loadedProfile);
-            }
-
-            preserveBaseStoryText = story ?? false;
-            preserveBaseBnpcNames = bnpc ?? legacyBnpc;
-            preserveBaseActionNames = actions ?? legacyActions;
-            preserveBaseCommonPhrases = common ?? legacyCommon;
-            preserveBaseDutyNames = duty ?? legacyDuty;
-            preserveBaseItemNames = item ?? legacyItem;
-            preserveBasePlaceNames = place ?? legacyPlace;
-            preserveBaseRemainderText = remainder ?? false;
-            preserveBaseUiAssets = uiAssets ?? false;
-
-            if (migrateStoryProfileToCustom)
-            {
-                ApplyStoryTextProfileDefaults();
-            }
-            else if (!string.Equals(textProfile, "custom", StringComparison.Ordinal))
-            {
-                ApplyFullTextProfileDefaults();
-            }
+            if (textProfile == "custom") ApplyScopeOutcomes(customDraft);
+            else ApplyFullTextProfileDefaults();
         }
 
         private bool[] GetScopeOutcomes()
@@ -1127,21 +1072,56 @@ namespace FFXIVKoreanPatch.Main
 
         private void SaveTextConfigurationSettings()
         {
-            string path = GetPatchOptionSettingsPath();
-            string[] lines = new string[]
+            string temporaryPath = null;
+            string path = null;
+            try
             {
-                "textProfile=" + textProfile,
-                "story=" + FormatScopeOutcome(preserveBaseStoryText),
-                "bnpc=" + FormatScopeOutcome(preserveBaseBnpcNames),
-                "actions=" + FormatScopeOutcome(preserveBaseActionNames),
-                "duty=" + FormatScopeOutcome(preserveBaseDutyNames),
-                "item=" + FormatScopeOutcome(preserveBaseItemNames),
-                "place=" + FormatScopeOutcome(preserveBasePlaceNames),
-                "common=" + FormatScopeOutcome(preserveBaseCommonPhrases),
-                "remainder=" + FormatScopeOutcome(preserveBaseRemainderText),
-                "uiAssets=" + FormatScopeOutcome(preserveBaseUiAssets)
-            };
-            File.WriteAllLines(path, lines, Encoding.UTF8);
+                path = GetPatchOptionSettingsPath();
+                var lines = new List<string>
+                {
+                    "targetLanguage=" + targetLanguageCode,
+                    "textProfile=" + textProfile
+                };
+                bool[] outcomes = GetScopeOutcomes();
+                for (int i = 0; i < outcomes.Length; i++)
+                {
+                    lines.Add(outcomeSettingKeys[i] + "=" + FormatScopeOutcome(outcomes[i]));
+                    lines.Add("custom." + outcomeSettingKeys[i] + "=" + FormatScopeOutcome(customDraft[i]));
+                }
+
+                temporaryPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                using (var stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                {
+                    using (var writer = new StreamWriter(stream, Encoding.UTF8, 1024, true))
+                    {
+                        foreach (string line in lines) writer.WriteLine(line);
+                        writer.Flush();
+                    }
+                    stream.Flush(true);
+                }
+                // Both paths are siblings: replacement never truncates the existing settings.
+                if (File.Exists(path)) File.Replace(temporaryPath, path, null);
+                else File.Move(temporaryPath, path);
+                settingsWarning = null;
+            }
+            catch (Exception exception) when (exception is IOException ||
+                                              exception is UnauthorizedAccessException ||
+                                              exception is System.Security.SecurityException)
+            {
+                settingsWarning = "설정을 저장하지 못했습니다. 현재 선택은 이번 실행에만 적용되며 재시작하면 이전 설정으로 돌아갑니다. " +
+                    "파일 권한, 잠금 및 디스크 여유 공간을 확인한 뒤 다시 선택해주세요." +
+                    Environment.NewLine + (path ?? "patch-options.txt") + Environment.NewLine + exception.Message;
+            }
+            finally
+            {
+                if (temporaryPath != null)
+                {
+                    try { File.Delete(temporaryPath); }
+                    catch (IOException) { }
+                    catch (UnauthorizedAccessException) { }
+                    catch (System.Security.SecurityException) { }
+                }
+            }
         }
 
         private static string FormatScopeOutcome(bool preserveBase)
@@ -3912,6 +3892,7 @@ namespace FFXIVKoreanPatch.Main
             }
 
             MarkPreflightRequired();
+            SaveTextConfigurationSettings();
             UpdateStatusLabel("베이스 클라이언트 언어: " + targetLanguageDisplayName + " (" + targetLanguageCode + "), 사전 점검을 다시 실행해주세요.");
             SetActionButtonsEnabled(true);
         }

@@ -46,6 +46,7 @@ namespace FFXIVKoreanPatch.Main
         public ClientPatchState State;
         public string StateDetail;
         public string GuardNote;
+        public string SettingsWarning;
     }
 
     // WPF shell for the patcher. The visual tree lives in MainWindow.xaml
@@ -749,6 +750,11 @@ namespace FFXIVKoreanPatch.Main
                 testPatchButton.IsEnabled = state.CanTestPatch;
 
                 ApplyStateHeader(state.State, state.StateDetail);
+                bool saveFailed = !string.IsNullOrEmpty(state.SettingsWarning);
+                settingsSaveState.Text = saveFailed ? "설정 저장 실패" : "선택 자동 저장";
+                settingsSaveState.Foreground = saveFailed ? statusErrorBrush : statusNormalBrush;
+                settingsSaveState.ToolTip = state.SettingsWarning;
+                AutomationProperties.SetHelpText(settingsSaveState, state.SettingsWarning ?? string.Empty);
 
                 if (string.IsNullOrEmpty(state.GuardNote))
                 {
