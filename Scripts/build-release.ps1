@@ -8,10 +8,19 @@ $solutionPath = Join-Path $repoRoot "FfxivKoreanPatch.sln"
 $releaseDir = Join-Path $repoRoot "Release\Public"
 $patchGeneratorBuild = Join-Path $repoRoot "FFXIVPatchGenerator\build.ps1"
 $rsvMapSync = Join-Path $repoRoot "Scripts\sync-rsv-map.ps1"
+$fontAssetsDir = Join-Path $repoRoot "FFXIVPatchGenerator\FontPatchAssets"
+$fontPackageFiles = @("TTMPD.mpd", "TTMPL.mpl")
 $msbuild = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\18\BuildTools\MSBuild\Current\Bin\MSBuild.exe"
 
 if (!(Test-Path $msbuild)) {
     throw "MSBuild was not found: $msbuild"
+}
+
+foreach ($fontFile in $fontPackageFiles) {
+    $fontPath = Join-Path $fontAssetsDir $fontFile
+    if (!(Test-Path -LiteralPath $fontPath -PathType Leaf) -or (Get-Item -LiteralPath $fontPath).Length -eq 0) {
+        throw "Required TTMP font package is missing or empty: $fontPath. Prepare both TTMPD.mpd and TTMPL.mpl before building a release."
+    }
 }
 
 & powershell -ExecutionPolicy Bypass -File $patchGeneratorBuild -Configuration $Configuration
@@ -159,6 +168,17 @@ $embeddedRsvHash = Get-EmbeddedResourceSha256 `
 
 if ($embeddedRsvHash -ne $rsvHash) {
     throw "Release executable embedded an outdated rsv.json. Embedded=$embeddedRsvHash Built=$rsvHash"
+}
+
+foreach ($fontFile in $fontPackageFiles) {
+    $fontHash = (Get-FileHash -LiteralPath (Join-Path $fontAssetsDir $fontFile) -Algorithm SHA256).Hash
+    $embeddedFontHash = Get-EmbeddedResourceSha256 `
+        -AssemblyPath $releaseExe `
+        -ResourceName "EmbeddedPayloads.$fontFile"
+    if ($embeddedFontHash -ne $fontHash) {
+        throw "Release executable embedded an outdated $fontFile. Embedded=$embeddedFontHash Source=$fontHash"
+    }
+    Write-Host "Embedded $fontFile verified: $fontHash"
 }
 
 Write-Host "Release files written to $releaseDir"
