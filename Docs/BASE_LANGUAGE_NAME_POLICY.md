@@ -52,6 +52,10 @@ matching route:
 - `XBMItem`: singular/plural/display names, effect descriptions, and short descriptions.
 - `XBMItemType`: trial-item category names.
 - `XBMScoreBonus`: bonus names and completion conditions.
+- `XBMActionEffectType`: action-effect categories.
+- `XBMActionTarget`: action-target descriptions.
+- `XBMElement`: element and damage-type labels, preserving native GUI control bytes.
+- `XBMScoreRank`: trial score-rank titles.
 
 Only these exact sheet names are enabled; other `XBM*` sheets remain outside
 this allowlist.
@@ -62,6 +66,11 @@ when the other seven scopes use Korean. UI images and name-only scopes,
 including Item names, do not control these strings. Remainder is not a
 Beastmaster-only option; it
 also controls the other text covered by that scope.
+
+Missing or empty Korean XBM strings retain the selected base-language bytes;
+Korean-only rows are not appended. The empty Korean Bestiary subtitle
+(`Addon#17701`) also intentionally retains its Japanese/English original.
+This change adds no subtitle-hiding remap.
 
 ## UI Settings and Migration
 

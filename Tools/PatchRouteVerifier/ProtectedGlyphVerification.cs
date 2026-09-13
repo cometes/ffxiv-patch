@@ -8,6 +8,91 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
         private sealed partial class Verifier
         {
             private const int PartyListSelfMarkerTexturePadding = 8;
+            private const uint BeastmasterPawCodepoint = 0xE036u;
+
+            private void VerifyBeastmasterPawGlyphs()
+            {
+                Console.WriteLine("[FDT] Beastmaster paw clean-source routes");
+                if (_ttmpFont == null)
+                {
+                    Fail("Beastmaster U+E036 verification requires the TTMP font-path inventory");
+                    return;
+                }
+
+                int inspected = 0;
+                int requiredRoutes = 0;
+                string[] paths = _ttmpFont.GetPayloadPaths();
+                for (int i = 0; i < paths.Length; i++)
+                {
+                    string targetFontPath = paths[i];
+                    if (!targetFontPath.EndsWith(".fdt", StringComparison.OrdinalIgnoreCase) ||
+                        IsLobbyFontPath(targetFontPath) ||
+                        (!_patchedFont.ContainsPath(targetFontPath) && !_cleanFont.ContainsPath(targetFontPath)))
+                    {
+                        continue;
+                    }
+
+                    inspected++;
+                    string sourceFontPath = targetFontPath;
+                    for (int route = 0; route < PartyListSelfMarkerKoreanFontChecks.GetLength(0); route++)
+                    {
+                        if (string.Equals(targetFontPath, PartyListSelfMarkerKoreanFontChecks[route, 1], StringComparison.OrdinalIgnoreCase))
+                        {
+                            sourceFontPath = PartyListSelfMarkerKoreanFontChecks[route, 0];
+                            break;
+                        }
+                    }
+
+                    if (!_cleanFont.ContainsPath(sourceFontPath))
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        byte[] sourceFdt = _cleanFont.ReadFile(sourceFontPath);
+                        int fontTableOffset;
+                        uint glyphCount;
+                        int glyphStart;
+                        if (!TryGetFdtGlyphTable(sourceFdt, out fontTableOffset, out glyphCount, out glyphStart))
+                        {
+                            Fail("{0} clean FDT is invalid; cannot determine required U+E036 coverage", sourceFontPath);
+                            continue;
+                        }
+
+                        FdtGlyphEntry ignored;
+                        if (!TryFindGlyph(sourceFdt, BeastmasterPawCodepoint, out ignored))
+                        {
+                            continue;
+                        }
+
+                        requiredRoutes++;
+                        // Neither the TTMP nor output glyph intersection defines this
+                        // requirement. The clean source alone proves the route.
+                        // Equality requires visible clean-equivalent alpha even when
+                        // the optional '=' fallback comparison has no reference.
+                        VerifyPartyListSelfMarkerGlyphRoute(sourceFontPath, targetFontPath, BeastmasterPawCodepoint);
+                        ExpectGlyphNotEqualToFallback(targetFontPath, BeastmasterPawCodepoint, '=');
+                    }
+                    catch (Exception ex)
+                    {
+                        Fail("{0} -> {1} required U+E036 verification error: {2}", sourceFontPath, targetFontPath, ex.Message);
+                    }
+                }
+
+                if (inspected == 0)
+                {
+                    Fail("Beastmaster U+E036 verification found no emitted in-game FDT routes");
+                }
+                else if (requiredRoutes == 0)
+                {
+                    Fail("Beastmaster U+E036 has no clean-source glyph in {0} emitted in-game FDT routes; paw restoration was not exercised", inspected);
+                }
+                else
+                {
+                    Console.WriteLine("  Beastmaster U+E036 routes inspected={0}, required={1}", inspected, requiredRoutes);
+                }
+            }
 
             private void VerifyPartyListSelfMarker()
             {

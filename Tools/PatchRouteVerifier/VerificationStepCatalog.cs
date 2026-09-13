@@ -65,6 +65,7 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
                     new VerificationStep("shared-ui-font-consistency", VerifySharedUiFontConsistency),
                     new VerificationStep("pvp-profile-font-routes", VerifyPvpProfileFontRoutes),
                     new VerificationStep("party-list-self-marker", VerifyPartyListSelfMarker),
+                    new VerificationStep("beastmaster-paw", VerifyBeastmasterPawGlyphs),
                     new VerificationStep("lobby-hangul-visibility", VerifyLobbyHangulVisibility),
                     new VerificationStep("lobby-render-snapshots", VerifyLobbyRenderSnapshots),
                     new VerificationStep("lobby-phrase-glyph-diagnostics", VerifyLobbyPhraseGlyphDiagnostics),

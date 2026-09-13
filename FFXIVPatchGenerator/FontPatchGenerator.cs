@@ -42,6 +42,7 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
         private const int FdtKerningEntrySize = 0x10;
         private static readonly uint[] PartyListSelfMarkerPrimaryStarts = new uint[] { 0xE031u, 0xE0E1u };
         private static readonly int[] PartyListSelfMarkerPrimaryCounts = new int[] { 1, 8 };
+        private const uint BeastmasterPawCodepoint = 0xE036u;
         private static readonly uint[] PartyListProtectedPuaGlyphSeeds = new uint[]
         {
             0xE031u,
@@ -212,6 +213,8 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
         private readonly BuildOptions _options;
         private readonly BuildReport _report;
         private readonly uint[] _patchedOutputHangulCodepoints;
+        private readonly Dictionary<string, DeferredFontFdt> _deferredInGameFontFdts =
+            new Dictionary<string, DeferredFontFdt>(StringComparer.OrdinalIgnoreCase);
 
         public FontPatchGenerator(BuildOptions options, BuildReport report)
             : this(options, report, null)
@@ -396,6 +399,7 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
         {
             using (FileStream mpdStream = new FileStream(fontPackage.MpdPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
             {
+                _deferredInGameFontFdts.Clear();
                 FontGlyphRepairContext glyphRepair = TryCreateFontGlyphRepairContext(fontPackage, mpdStream, globalArchive, _options.FontOnly, _lobbyVisibleCjkCodepoints);
                 TargetedGlyphRepairContext dialogueGlyphRepair = TryCreateDialogueGlyphArtifactRepairContext(fontPackage, mpdStream);
                 ProtectedHangulGlyphContext protectedHangulGlyphs = TryCreateProtectedHangulGlyphContext(fontPackage, mpdStream, globalArchive);
@@ -428,106 +432,126 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                     pvpProfileVisualScaleCodepoints,
                     lobbyHangulCodepoints);
 
-                for (int i = 0; i < fontPackage.Payloads.Count; i++)
+                int processedPayloads = 0;
+                for (int pass = 0; pass < 2; pass++)
                 {
-                    FontPayload payload = fontPackage.Payloads[i];
-                    string path = NormalizeGamePath(payload.FullPath);
-                    ProgressReporter.Report(90 + i * 8 / fontPackage.Payloads.Count, "Font patching " + (i + 1).ToString() + "/" + fontPackage.Payloads.Count.ToString());
-
-                    if (!ShouldIncludeFontPath(path))
+                    if (pass == 1)
                     {
-                        _report.FontFilesSkippedByProfile++;
-                        continue;
+                        WriteDeferredInGameFontFdts(globalArchive, glyphRepair, texturePatches, datWriter, mutableIndex, mutableIndex2);
                     }
 
-                    if (!mutableIndex.ContainsPath(path))
+                    for (int i = 0; i < fontPackage.Payloads.Count; i++)
                     {
-                        AddLimitedWarning("Missing global font target: " + path);
-                        continue;
-                    }
-
-                    if (!mutableIndex2.ContainsPath(path))
-                    {
-                        AddLimitedWarning("Missing global font index2 target: " + path);
-                        continue;
-                    }
-
-                    bool patchLobbyHangulFont = ShouldPatchLobbyHangulFont(path, SelectLobbyHangulCodepointsForFont(path, lobbyHangulCodepoints));
-                    List<FontTexturePatch> pendingTexturePatches;
-                    if (ShouldPreserveCleanGlobalLobbyPayload(path) && !patchLobbyHangulFont)
-                    {
-                        if (IsLobbyFontTexturePath(path) &&
-                            texturePatches.TryGetValue(path, out pendingTexturePatches) &&
-                            pendingTexturePatches.Count > 0)
+                        FontPayload payload = fontPackage.Payloads[i];
+                        string path = NormalizeGamePath(payload.FullPath);
+                        // Prepare all FDTs in their original order, then emit
+                        // textures once with both existing repairs and paws.
+                        if (path.EndsWith(".fdt", StringComparison.OrdinalIgnoreCase) != (pass == 0))
                         {
-                            byte[] cleanPackedTexture;
-                            if (!globalArchive.TryReadPackedFile(path, out cleanPackedTexture))
+                            continue;
+                        }
+
+                        ProgressReporter.Report(90 + processedPayloads * 8 / fontPackage.Payloads.Count, "Font patching " + (++processedPayloads).ToString() + "/" + fontPackage.Payloads.Count.ToString());
+
+                        if (!ShouldIncludeFontPath(path))
+                        {
+                            _report.FontFilesSkippedByProfile++;
+                            continue;
+                        }
+
+                        if (!mutableIndex.ContainsPath(path))
+                        {
+                            AddLimitedWarning("Missing global font target: " + path);
+                            continue;
+                        }
+
+                        if (!mutableIndex2.ContainsPath(path))
+                        {
+                            AddLimitedWarning("Missing global font index2 target: " + path);
+                            continue;
+                        }
+
+                        bool patchLobbyHangulFont = ShouldPatchLobbyHangulFont(path, SelectLobbyHangulCodepointsForFont(path, lobbyHangulCodepoints));
+                        List<FontTexturePatch> pendingTexturePatches;
+                        if (ShouldPreserveCleanGlobalLobbyPayload(path) && !patchLobbyHangulFont)
+                        {
+                            if (IsLobbyFontTexturePath(path) &&
+                                texturePatches.TryGetValue(path, out pendingTexturePatches) &&
+                                pendingTexturePatches.Count > 0)
                             {
-                                AddLimitedWarning("Clean lobby texture source was not found: " + path);
+                                byte[] cleanPackedTexture;
+                                if (!globalArchive.TryReadPackedFile(path, out cleanPackedTexture))
+                                {
+                                    AddLimitedWarning("Clean lobby texture source was not found: " + path);
+                                    continue;
+                                }
+
+                                byte[] patchedPackedTexture = PatchPackedFontTexture(path, cleanPackedTexture, pendingTexturePatches);
+                                patchedTexturePayloadsByPath[path] = patchedPackedTexture;
+                                long lobbyTextureOffset = datWriter.WritePackedFile(patchedPackedTexture);
+                                mutableIndex.SetFileOffset(path, 1, lobbyTextureOffset);
+                                mutableIndex2.SetFileOffset(path, 1, lobbyTextureOffset);
+                                _report.FontFilesPatched++;
+                                Console.WriteLine("  Patched clean-lobby Hangul texture cells: {0} ({1})", pendingTexturePatches.Count, path);
+                                pendingTexturePatches.Clear();
                                 continue;
                             }
 
-                            byte[] patchedPackedTexture = PatchPackedFontTexture(path, cleanPackedTexture, pendingTexturePatches);
-                            patchedTexturePayloadsByPath[path] = patchedPackedTexture;
-                            long lobbyTextureOffset = datWriter.WritePackedFile(patchedPackedTexture);
-                            mutableIndex.SetFileOffset(path, 1, lobbyTextureOffset);
-                            mutableIndex2.SetFileOffset(path, 1, lobbyTextureOffset);
-                            _report.FontFilesPatched++;
-                            Console.WriteLine("  Patched clean-lobby Hangul texture cells: {0} ({1})", pendingTexturePatches.Count, path);
+                            _report.FontFilesSkippedByProfile++;
+                            Console.WriteLine("  Preserved clean global lobby font payload: {0}", path);
+                            continue;
+                        }
+
+                        byte[] packedFile;
+                        if (patchLobbyHangulFont)
+                        {
+                            if (!globalArchive.TryReadPackedFile(path, out packedFile))
+                            {
+                                AddLimitedWarning("Clean lobby font source was not found: " + path);
+                                continue;
+                            }
+                        }
+                        else
+                        {
+                            packedFile = ReadPackedPayload(mpdStream, payload.ModOffset, payload.ModSize, path);
+                        }
+
+                        int normalized;
+                        long datOffset;
+                        if (texturePatches.TryGetValue(path, out pendingTexturePatches) && pendingTexturePatches.Count > 0)
+                        {
+                            int protectedRestores = AppendProtectedHangulGlyphTexturePatches(path, pendingTexturePatches, protectedHangulGlyphs);
+                            byte[] patchedPackedTexture = PatchPackedFontTexture(path, packedFile, pendingTexturePatches);
+                            if (path.EndsWith(".tex", StringComparison.OrdinalIgnoreCase))
+                            {
+                                patchedTexturePayloadsByPath[path] = patchedPackedTexture;
+                            }
+
+                            datOffset = datWriter.WritePackedFile(patchedPackedTexture);
+                            normalized = 0;
+                            if (protectedRestores > 0)
+                            {
+                                Console.WriteLine("  Restored protected glyph cells: {0} ({1})", protectedRestores, path);
+                            }
+
+                            Console.WriteLine("  Patched repaired font texture cells: {0} ({1})", pendingTexturePatches.Count, path);
                             pendingTexturePatches.Clear();
-                            continue;
                         }
-
-                        _report.FontFilesSkippedByProfile++;
-                        Console.WriteLine("  Preserved clean global lobby font payload: {0}", path);
-                        continue;
-                    }
-
-                    byte[] packedFile;
-                    if (patchLobbyHangulFont)
-                    {
-                        if (!globalArchive.TryReadPackedFile(path, out packedFile))
+                        else
                         {
-                            AddLimitedWarning("Clean lobby font source was not found: " + path);
-                            continue;
+                            datOffset = WriteFontPayload(datWriter, path, packedFile, mpdStream, payloadsByPath, dialogueGlyphRepair, glyphRepair, globalArchive, texturePatches, lobbyHangulAllocationCache, actionDetailHighScaleHangulCodepoints, pvpProfileVisualScaleCodepoints, lobbyHangulCodepoints, out normalized);
                         }
-                    }
-                    else
-                    {
-                        packedFile = ReadPackedPayload(mpdStream, payload.ModOffset, payload.ModSize, path);
-                    }
 
-                    int normalized;
-                    long datOffset;
-                    if (texturePatches.TryGetValue(path, out pendingTexturePatches) && pendingTexturePatches.Count > 0)
-                    {
-                        int protectedRestores = AppendProtectedHangulGlyphTexturePatches(path, pendingTexturePatches, protectedHangulGlyphs);
-                        byte[] patchedPackedTexture = PatchPackedFontTexture(path, packedFile, pendingTexturePatches);
-                        if (path.EndsWith(".tex", StringComparison.OrdinalIgnoreCase))
+                        LogFontPayloadAdjustments(path, normalized);
+                        if (datOffset >= 0)
                         {
-                            patchedTexturePayloadsByPath[path] = patchedPackedTexture;
+                            mutableIndex.SetFileOffset(path, 1, datOffset);
+                            mutableIndex2.SetFileOffset(path, 1, datOffset);
                         }
-
-                        datOffset = datWriter.WritePackedFile(patchedPackedTexture);
-                        normalized = 0;
-                        if (protectedRestores > 0)
-                        {
-                            Console.WriteLine("  Restored protected glyph cells: {0} ({1})", protectedRestores, path);
-                        }
-
-                        Console.WriteLine("  Patched repaired font texture cells: {0} ({1})", pendingTexturePatches.Count, path);
-                        pendingTexturePatches.Clear();
+                        _report.FontFilesPatched++;
                     }
-                    else
-                    {
-                        datOffset = WriteFontPayload(datWriter, path, packedFile, mpdStream, payloadsByPath, dialogueGlyphRepair, glyphRepair, globalArchive, texturePatches, lobbyHangulAllocationCache, actionDetailHighScaleHangulCodepoints, pvpProfileVisualScaleCodepoints, lobbyHangulCodepoints, out normalized);
-                    }
-
-                    LogFontPayloadAdjustments(path, normalized);
-                    mutableIndex.SetFileOffset(path, 1, datOffset);
-                    mutableIndex2.SetFileOffset(path, 1, datOffset);
-                    _report.FontFilesPatched++;
                 }
+
 
                 foreach (KeyValuePair<string, List<FontTexturePatch>> pair in texturePatches)
                 {
@@ -587,7 +611,61 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                         pair.Value.Clear();
                     }
                 }
+
+                foreach (KeyValuePair<string, List<FontTexturePatch>> pair in texturePatches)
+                {
+                    for (int i = 0; i < pair.Value.Count; i++)
+                    {
+                        if (pair.Value[i].SourceCodepoint == BeastmasterPawCodepoint)
+                        {
+                            throw new InvalidDataException("Required clean U+E036 paw texture was not emitted: " + pair.Key);
+                        }
+                    }
+                }
             }
+        }
+
+        private long WriteOrDeferFontFdt(SqPackDatWriter datWriter, string path, byte[] fdt, byte[] packedFile)
+        {
+            if (!IsLobbyFontPath(path))
+            {
+                DeferredFontFdt deferred = new DeferredFontFdt();
+                deferred.Fdt = fdt;
+                deferred.PackedFile = packedFile;
+                _deferredInGameFontFdts[path] = deferred;
+                // No index entry is changed until the deferred FDT is emitted.
+                return -1;
+            }
+
+            return packedFile == null ? datWriter.WriteStandardFile(fdt) : datWriter.WritePackedFile(packedFile);
+        }
+
+        private void WriteDeferredInGameFontFdts(
+            SqPackArchive globalArchive,
+            FontGlyphRepairContext glyphRepair,
+            Dictionary<string, List<FontTexturePatch>> texturePatches,
+            SqPackDatWriter datWriter,
+            SqPackIndexFile mutableIndex,
+            SqPackIndex2File mutableIndex2)
+        {
+            // Allocate paws only after every existing glyph repair. Otherwise a
+            // new cell shifts later ASCII/PUA cells and changes their mip phase.
+            foreach (KeyValuePair<string, DeferredFontFdt> pair in _deferredInGameFontFdts)
+            {
+                byte[] fdt = pair.Value.Fdt;
+                int repaired = ApplyPartyListSelfMarkerCleanShapes(pair.Key, ref fdt, glyphRepair, globalArchive, texturePatches, true);
+                long offset = repaired == 0 && pair.Value.PackedFile != null
+                    ? datWriter.WritePackedFile(pair.Value.PackedFile)
+                    : datWriter.WriteStandardFile(fdt);
+                mutableIndex.SetFileOffset(pair.Key, 1, offset);
+                mutableIndex2.SetFileOffset(pair.Key, 1, offset);
+                if (repaired > 0)
+                {
+                    Console.WriteLine("  Queued Beastmaster paw clean glyph cells: {0} ({1})", repaired, pair.Key);
+                }
+            }
+
+            _deferredInGameFontFdts.Clear();
         }
 
         private void WriteSupplementalLobbyFontFiles(
@@ -917,6 +995,9 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             string preferredTexturePath,
             int width,
             int height,
+            int alignment,
+            int xPhase,
+            int yPhase,
             out string allocatedTexturePath,
             out AllocatedFontGlyphCell allocatedCell)
         {
@@ -961,7 +1042,10 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                     continue;
                 }
 
-                if (glyphRepair.TryAllocate(candidate, width, height, out allocatedCell))
+                bool allocated = alignment > 1
+                    ? glyphRepair.TryAllocateAligned(candidate, width, height, alignment, xPhase, yPhase, out allocatedCell)
+                    : glyphRepair.TryAllocate(candidate, width, height, out allocatedCell);
+                if (allocated)
                 {
                     allocatedTexturePath = candidate;
                     return true;
@@ -1093,7 +1177,7 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 startScreenKerningFixes == 0 &&
                 originalPackedFile != null)
             {
-                return datWriter.WritePackedFile(originalPackedFile);
+                return WriteOrDeferFontFdt(datWriter, path, fdt, originalPackedFile);
             }
 
             if (aliases > 0)
@@ -1154,7 +1238,7 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 Console.WriteLine("  Added start-screen system-settings kerning pairs: {0} ({1})", startScreenKerningFixes, path);
             }
 
-            return datWriter.WriteStandardFile(fdt);
+            return WriteOrDeferFontFdt(datWriter, path, fdt, null);
         }
 
         private static void LogFontPayloadAdjustments(string path, int normalized)
@@ -3578,13 +3662,11 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             ref byte[] targetFdt,
             FontGlyphRepairContext glyphRepair,
             SqPackArchive globalArchive,
-            Dictionary<string, List<FontTexturePatch>> texturePatches)
+            Dictionary<string, List<FontTexturePatch>> texturePatches,
+            bool pawOnly = false)
         {
-            if (!ShouldPatchPartyListSelfMarkerCleanShapeFont(path) ||
-                glyphRepair == null ||
-                globalArchive == null ||
-                texturePatches == null ||
-                targetFdt == null)
+            if (IsLobbyFontPath(path) || globalArchive == null ||
+                (!pawOnly && !ShouldPatchPartyListSelfMarkerCleanShapeFont(path)))
             {
                 return 0;
             }
@@ -3605,9 +3687,33 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 return 0;
             }
 
+            bool repairOtherPua = !pawOnly && ShouldPatchPartyListSelfMarkerCleanShapeFont(path);
+            int sourceFontTableOffset;
+            uint sourceGlyphCount;
+            int sourceGlyphStart;
+            int sourcePawOffset;
+            bool requiresPaw =
+                pawOnly &&
+                TryGetFdtGlyphTable(sourceFdt, out sourceFontTableOffset, out sourceGlyphCount, out sourceGlyphStart) &&
+                TryFindGlyphEntryOffset(sourceFdt, sourceGlyphStart, sourceGlyphCount, PackFdtUtf8Value(BeastmasterPawCodepoint), out sourcePawOffset);
+            if (!requiresPaw && !repairOtherPua)
+            {
+                return 0;
+            }
+
             Dictionary<uint, byte[]> sourceEntries = ReadGlyphEntriesByUtf8Value(sourceFdt);
             if (sourceEntries.Count == 0)
             {
+                return 0;
+            }
+
+            if (glyphRepair == null || texturePatches == null || targetFdt == null)
+            {
+                if (requiresPaw)
+                {
+                    throw new InvalidDataException("Required clean U+E036 paw restoration context is missing: " + normalizedPath);
+                }
+
                 return 0;
             }
 
@@ -3616,6 +3722,11 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             int glyphStart;
             if (!TryGetFdtGlyphTable(targetFdt, out fontTableOffset, out glyphCount, out glyphStart))
             {
+                if (requiresPaw)
+                {
+                    throw new InvalidDataException("Required clean U+E036 paw target FDT is invalid: " + normalizedPath);
+                }
+
                 return 0;
             }
 
@@ -3635,12 +3746,22 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 targetEntries.Add(entry);
             }
 
-            uint[] protectedPuaGlyphs = CollectProtectedPuaGlyphs(sourceEntries, targetEntryIndexes);
+            // Only the paw is source-proven on all emitted in-game routes.
+            // Keep the existing font boundary for every other protected PUA.
+            uint[] protectedPuaGlyphs = repairOtherPua
+                ? CollectProtectedPuaGlyphs(sourceEntries, targetEntryIndexes)
+                : new uint[] { BeastmasterPawCodepoint };
             Dictionary<string, byte[]> sourceTextures = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
             int changed = 0;
+            bool restoredPaw = false;
             for (int codepointIndex = 0; codepointIndex < protectedPuaGlyphs.Length; codepointIndex++)
             {
                 uint codepoint = protectedPuaGlyphs[codepointIndex];
+                if (!pawOnly && codepoint == BeastmasterPawCodepoint)
+                {
+                    continue;
+                }
+
                 uint utf8Value = PackFdtUtf8Value(codepoint);
                 byte[] sourceEntryBytes;
                 if (!sourceEntries.TryGetValue(utf8Value, out sourceEntryBytes))
@@ -3690,6 +3811,37 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                     continue;
                 }
 
+                if (codepoint == BeastmasterPawCodepoint)
+                {
+                    bool visible = false;
+                    for (int y = 0; y < sourceEntry.Height && !visible; y++)
+                    {
+                        int row = (y + sourceRegion.TopPadding) * sourceRegion.Width + sourceRegion.LeftPadding;
+                        for (int x = 0; x < sourceEntry.Width; x++)
+                        {
+                            if (sourceRegion.Alpha[row + x] != 0)
+                            {
+                                visible = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (!visible)
+                    {
+                        throw new InvalidDataException("Required clean U+E036 paw glyph is blank: " + sourceFdtPath);
+                    }
+                }
+
+                int alignment = 1;
+                if (pawOnly && sourceRegion.MipRegions != null)
+                {
+                    for (int mip = 0; mip < sourceRegion.MipRegions.Length; mip++)
+                    {
+                        alignment = Math.Max(alignment, 1 << Math.Min(16, sourceRegion.MipRegions[mip].Level));
+                    }
+                }
+
                 AllocatedFontGlyphCell allocatedCell = new AllocatedFontGlyphCell();
                 string allocatedTexturePath = targetTexturePath;
                 bool useAllocatedCell = TryAllocateProtectedPuaGlyphCell(
@@ -3698,10 +3850,14 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                     targetTexturePath,
                     sourceRegion.Width,
                     sourceRegion.Height,
+                    alignment,
+                    (sourceEntry.X - sourceRegion.LeftPadding) & (alignment - 1),
+                    (sourceEntry.Y - sourceRegion.TopPadding) & (alignment - 1),
                     out allocatedTexturePath,
                     out allocatedCell);
                 bool canReuseTargetCell =
                     !useAllocatedCell &&
+                    codepoint != BeastmasterPawCodepoint &&
                     hasTargetEntry &&
                     PatchFitsAllocatedFontTexture(
                         glyphRepair,
@@ -3771,7 +3927,19 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                     targetEntries.Add(replacementEntry);
                 }
 
+                if (codepoint == BeastmasterPawCodepoint)
+                {
+                    restoredPaw = true;
+                }
+
                 changed++;
+            }
+
+            if (requiresPaw && !restoredPaw)
+            {
+                throw new InvalidDataException(
+                    "Required clean U+E036 paw restoration failed (source glyph, texture, or atlas allocation unavailable): " +
+                    sourceFdtPath + " -> " + normalizedPath);
             }
 
             if (changed > 0)
@@ -8551,6 +8719,12 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             public int ModSize;
         }
 
+        private struct DeferredFontFdt
+        {
+            public byte[] Fdt;
+            public byte[] PackedFile;
+        }
+
         private struct FdtGlyphEntry
         {
             public ushort ImageIndex;
@@ -8717,6 +8891,31 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 cell.ImageIndex = ResolveImageIndexForTexturePath(normalized, cell.Channel);
                 cell.ClearWidth = Math.Max(1, width);
                 cell.ClearHeight = Math.Max(1, height);
+                return cell.ImageIndex >= 0;
+            }
+
+            public bool TryAllocateAligned(
+                string texturePath,
+                int width,
+                int height,
+                int alignment,
+                int xPhase,
+                int yPhase,
+                out AllocatedFontGlyphCell cell)
+            {
+                cell = new AllocatedFontGlyphCell();
+                string normalized = NormalizeGamePath(texturePath);
+                FontAtlasAllocator allocator;
+                if (IsLobbyFontTexturePath(normalized) ||
+                    !_allocators.TryGetValue(normalized, out allocator) ||
+                    !allocator.TryAllocateAligned(width, height, alignment, xPhase, yPhase, out cell))
+                {
+                    return false;
+                }
+
+                cell.ImageIndex = ResolveImageIndexForTexturePath(normalized, cell.Channel);
+                cell.ClearWidth = width;
+                cell.ClearHeight = height;
                 return cell.ImageIndex >= 0;
             }
 
@@ -9370,6 +9569,46 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 }
 
                 return TryAllocateDense(w, h, allowBottomEdge, out cell);
+            }
+
+            public bool TryAllocateAligned(
+                int width,
+                int height,
+                int alignment,
+                int xPhase,
+                int yPhase,
+                out AllocatedFontGlyphCell cell)
+            {
+                cell = new AllocatedFontGlyphCell();
+                int maxX = _texture.Width - width;
+                int maxY = _texture.Height - height;
+                if (width <= 0 || height <= 0 || maxX < xPhase || maxY < yPhase)
+                {
+                    return false;
+                }
+
+                int firstY = maxY - ((maxY - yPhase) % alignment);
+                for (int channel = 0; channel < _occupiedBits.Length; channel++)
+                {
+                    for (int y = firstY; y >= 0; y -= alignment)
+                    {
+                        for (int x = xPhase; x <= maxX; x += alignment)
+                        {
+                            if (!IsFree(x, y, width, height, channel))
+                            {
+                                continue;
+                            }
+
+                            MarkOccupied(x, y, width, height, channel);
+                            cell.X = x;
+                            cell.Y = y;
+                            cell.Channel = channel;
+                            return true;
+                        }
+                    }
+                }
+
+                return false;
             }
 
             private bool TryAllocateDense(int width, int height, bool allowBottomEdge, out AllocatedFontGlyphCell cell)
