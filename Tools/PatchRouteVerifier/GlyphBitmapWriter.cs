@@ -6,8 +6,9 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
         {
             private static void WriteGlyphPng(GlyphCanvas canvas, string path)
             {
-                int width = GlyphCanvasSize * GlyphDumpScale;
-                int height = GlyphCanvasSize * GlyphDumpScale;
+                int canvasSize = GetGlyphCanvasSize(canvas.Alpha);
+                int width = canvasSize * GlyphDumpScale;
+                int height = canvasSize * GlyphDumpScale;
                 using (System.Drawing.Bitmap bitmap = new System.Drawing.Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format32bppArgb))
                 {
                     using (System.Drawing.Graphics graphics = System.Drawing.Graphics.FromImage(bitmap))
@@ -15,11 +16,11 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
                         graphics.Clear(System.Drawing.Color.Black);
                     }
 
-                    for (int y = 0; y < GlyphCanvasSize; y++)
+                    for (int y = 0; y < canvasSize; y++)
                     {
-                        for (int x = 0; x < GlyphCanvasSize; x++)
+                        for (int x = 0; x < canvasSize; x++)
                         {
-                            byte alpha = canvas.Alpha[y * GlyphCanvasSize + x];
+                            byte alpha = canvas.Alpha[y * canvasSize + x];
                             if (alpha == 0)
                             {
                                 continue;

@@ -6,7 +6,7 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
     {
         public const string SourceFontPath = "common/font/TrumpGothic_34.fdt";
         public const string TargetFontPath = "common/font/TrumpGothic_68.fdt";
-        public const double LargeUiHangulToDigitRatio = 1.08d;
+        public const double LargeUiHangulToDigitRatio = 0.88d;
 
         public const string InstantCastPhrase = "\uC989\uC2DC \uBC1C\uB3D9";
         public const string CastTimePhrase = "\uC2DC\uC804 \uC2DC\uAC04";

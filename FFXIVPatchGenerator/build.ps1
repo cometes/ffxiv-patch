@@ -21,6 +21,7 @@ $sources = @(
     "SharedUi100PercentHangulGlyphs.cs",
     "PartyBonusRoleFontPatch.cs",
     "DutyFinderRoleFontPatch.cs",
+    "InventorySubtitleSpacingPatch.cs",
     "LobbyScaledHangulPhrases.cs",
     "LobbyHangulCoverage.cs",
     "UiPatchGenerator.cs",

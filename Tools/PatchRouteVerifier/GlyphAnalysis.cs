@@ -8,19 +8,20 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
         {
             private static GlyphStats AnalyzeGlyph(GlyphCanvas canvas)
             {
+                int canvasSize = GetGlyphCanvasSize(canvas.Alpha);
                 GlyphStats stats = new GlyphStats();
-                stats.MinX = GlyphCanvasSize;
-                stats.MinY = GlyphCanvasSize;
+                stats.MinX = canvasSize;
+                stats.MinY = canvasSize;
                 stats.MaxX = -1;
                 stats.MaxY = -1;
 
                 bool[] seen = new bool[canvas.Alpha.Length];
                 int[] stack = new int[canvas.Alpha.Length];
-                for (int y = 0; y < GlyphCanvasSize; y++)
+                for (int y = 0; y < canvasSize; y++)
                 {
-                    for (int x = 0; x < GlyphCanvasSize; x++)
+                    for (int x = 0; x < canvasSize; x++)
                     {
-                        int start = y * GlyphCanvasSize + x;
+                        int start = y * canvasSize + x;
                         if (seen[start] || canvas.Alpha[start] == 0)
                         {
                             continue;
@@ -38,8 +39,8 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
                         while (stackCount > 0)
                         {
                             int current = stack[--stackCount];
-                            int cx = current % GlyphCanvasSize;
-                            int cy = current / GlyphCanvasSize;
+                            int cx = current % canvasSize;
+                            int cy = current / canvasSize;
                             area++;
                             if (cx < minX) minX = cx;
                             if (cy < minY) minY = cy;
@@ -57,12 +58,12 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
 
                                     int nx = cx + dx;
                                     int ny = cy + dy;
-                                    if (nx < 0 || ny < 0 || nx >= GlyphCanvasSize || ny >= GlyphCanvasSize)
+                                    if (nx < 0 || ny < 0 || nx >= canvasSize || ny >= canvasSize)
                                     {
                                         continue;
                                     }
 
-                                    int next = ny * GlyphCanvasSize + nx;
+                                    int next = ny * canvasSize + nx;
                                     if (seen[next] || canvas.Alpha[next] == 0)
                                     {
                                         continue;

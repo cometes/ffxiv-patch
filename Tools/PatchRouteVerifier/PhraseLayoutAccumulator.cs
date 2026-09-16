@@ -28,9 +28,9 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
             private uint _minimumRequiredGapLeftCodepoint;
             private uint _minimumRequiredGapRightCodepoint;
 
-            public void AddSpace()
+            public void AddSpace(int advance)
             {
-                _cursor += PhraseLayoutSpaceAdvance;
+                _cursor += advance;
                 _hasPreviousGlyphBounds = false;
                 _previousGlyphRequiredGapPixels = 0;
             }
@@ -125,11 +125,12 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
 
             private int AddGlyphPixels(byte[] alpha)
             {
+                int canvasSize = GetGlyphCanvasSize(alpha);
                 int overlap = 0;
-                for (int y = 0; y < GlyphCanvasSize; y++)
+                for (int y = 0; y < canvasSize; y++)
                 {
-                    int rowOffset = y * GlyphCanvasSize;
-                    for (int x = 0; x < GlyphCanvasSize; x++)
+                    int rowOffset = y * canvasSize;
+                    for (int x = 0; x < canvasSize; x++)
                     {
                         if (alpha[rowOffset + x] == 0)
                         {

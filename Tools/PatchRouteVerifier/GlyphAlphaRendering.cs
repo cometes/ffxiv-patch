@@ -7,7 +7,10 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
     {
         private static byte[] RenderGlyphAlpha(Texture texture, FdtGlyphEntry glyph)
         {
-            byte[] canvas = new byte[GlyphCanvasSize * GlyphCanvasSize];
+            int canvasSize = System.Math.Max(
+                GlyphCanvasSize,
+                System.Math.Max(32 + glyph.Width, 32 + glyph.OffsetY + glyph.Height));
+            byte[] canvas = new byte[canvasSize * canvasSize];
             int channel = glyph.ImageIndex % 4;
             int startX = 32;
             int startY = 32 + glyph.OffsetY;
@@ -17,19 +20,28 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
                 for (int x = 0; x < glyph.Width; x++)
                 {
                     int dx = startX + x;
-                    if (dx < 0 || dy < 0 || dx >= GlyphCanvasSize || dy >= GlyphCanvasSize)
-                    {
-                        continue;
-                    }
-
                     int sourceX = glyph.X + x;
                     int sourceY = glyph.Y + y;
                     int pixelOffset = GetTexturePixelOffset(texture, glyph.ImageIndex, sourceX, sourceY);
-                    canvas[dy * GlyphCanvasSize + dx] = ReadFontTextureAlpha(texture.Data, pixelOffset, channel);
+                    byte alpha = ReadFontTextureAlpha(texture.Data, pixelOffset, channel);
+                    if (dy < 0)
+                    {
+                        if (alpha != 0)
+                        {
+                            throw new InvalidDataException("Glyph ink extends above the verification canvas origin");
+                        }
+                        continue;
+                    }
+                    canvas[dy * canvasSize + dx] = alpha;
                 }
             }
 
             return canvas;
+        }
+
+        private static int GetGlyphCanvasSize(byte[] alpha)
+        {
+            return (int)System.Math.Sqrt(alpha.Length);
         }
 
         private static int GetTexturePixelOffset(Texture texture, int imageIndex, int sourceX, int sourceY)

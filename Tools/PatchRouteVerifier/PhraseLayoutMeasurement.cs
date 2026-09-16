@@ -5,7 +5,7 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
 {
     internal static partial class PatchRouteVerifier
     {
-        private const int PhraseLayoutSpaceAdvance = 8;
+        private const int FallbackWhitespaceAdvance = 8;
 
         private sealed partial class Verifier
         {
@@ -36,7 +36,7 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
 
                         if (IsPhraseLayoutSpace(codepoint))
                         {
-                            accumulator.AddSpace();
+                            accumulator.AddSpace(GetPhraseWhitespaceAdvance(fdt, codepoint));
                             previousCodepoint = codepoint;
                             hasPreviousCodepoint = true;
                             continue;
@@ -89,7 +89,7 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
 
                         if (IsPhraseLayoutSpace(codepoint))
                         {
-                            accumulator.AddSpace();
+                            accumulator.AddSpace(GetPhraseWhitespaceAdvance(fdt, codepoint));
                             previousCodepoint = codepoint;
                             hasPreviousCodepoint = true;
                             continue;
@@ -114,6 +114,12 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
                     error = ex.Message;
                     return false;
                 }
+            }
+
+            private static int GetPhraseWhitespaceAdvance(byte[] fdt, uint codepoint)
+            {
+                FdtGlyphEntry glyph;
+                return TryFindGlyph(fdt, codepoint, out glyph) ? GetGlyphAdvance(glyph) : FallbackWhitespaceAdvance;
             }
 
             private static bool IsPhraseLayoutSpace(uint codepoint)

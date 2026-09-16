@@ -5,6 +5,7 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
 {
     internal static partial class PatchRouteVerifier
     {
+        // Small glyphs retain the original footprint; larger glyphs expand it.
         private const int GlyphCanvasSize = 96;
 
         private sealed partial class Verifier

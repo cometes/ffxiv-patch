@@ -1682,26 +1682,27 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             }
 
             Dictionary<string, byte[]> sourceTextures = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
-            double targetDigitHeight = MeasureMeanVisibleHeightFromTtmpPayloads(
+            FontVisibleMetrics targetDigits = MeasureVisibleMetricsFromTtmpPayloads(
                 metricFdt,
                 spec.MetricFontPath,
                 ActionDetailNumericCodepoints,
                 payloadsByPath,
                 mpdStream);
-            double sourceHangulHeight = MeasureMeanVisibleHeightFromTtmpPayloads(
+            FontVisibleMetrics sourceHangul = MeasureVisibleMetricsFromTtmpPayloads(
                 sourceFdt,
                 spec.SourceFontPath,
                 requiredCodepoints,
                 payloadsByPath,
                 mpdStream);
-            if (targetDigitHeight <= 0d || sourceHangulHeight <= 0d)
+            if (targetDigits.MeanHeight <= 0d || sourceHangul.MeanHeight <= 0d)
             {
                 throw new InvalidOperationException(
                     "Large UI label Hangul visual baseline could not be measured for " + spec.TargetFontPath);
             }
 
-            double verticalScale = (targetDigitHeight * spec.HangulToDigitRatio) / sourceHangulHeight;
+            double verticalScale = (targetDigits.MeanHeight * spec.HangulToDigitRatio) / sourceHangul.MeanHeight;
             double horizontalScale = verticalScale * spec.WidthScaleMultiplier;
+            double verticalOrigin = targetDigits.MeanBottom - sourceHangul.MeanBottom * verticalScale;
             List<LargeUiLabelGlyphPatchPlan> plans = new List<LargeUiLabelGlyphPatchPlan>(requiredCodepoints.Length);
             for (int codepointIndex = 0; codepointIndex < requiredCodepoints.Length; codepointIndex++)
             {
@@ -1832,8 +1833,10 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 int sourceAdvance = Math.Max(1, sourceEntry.Width + sourceEntry.OffsetX);
                 int scaledAdvance = ClampInt((int)Math.Round(sourceAdvance * horizontalScale), 1, byte.MaxValue);
                 int scaledOffsetX = ClampInt(scaledAdvance - storedWidth, sbyte.MinValue, sbyte.MaxValue);
+                // Scale around the source Hangul baseline, then place it on the
+                // target digits' baseline. A source bearing is not a target bearing.
                 int scaledOffsetY = ClampInt(
-                    sourceEntry.OffsetY + scaledMinY,
+                    (int)Math.Round(verticalOrigin + sourceEntry.OffsetY * verticalScale) + scaledMinY,
                     sbyte.MinValue,
                     sbyte.MaxValue);
 
@@ -1978,12 +1981,12 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             }
 
             Dictionary<string, byte[]> sourceTextures = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
-            double targetDigitHeight = MeasureMeanVisibleHeightFromTtmpPayloads(
+            double targetDigitHeight = MeasureVisibleMetricsFromTtmpPayloads(
                 sourceFdt,
                 normalizedPath,
                 ActionDetailNumericCodepoints,
                 payloadsByPath,
-                mpdStream);
+                mpdStream).MeanHeight;
             if (targetDigitHeight <= 0d)
             {
                 return 0;
@@ -2458,12 +2461,12 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                     }
                 }
 
-                double sourceHangulHeight = MeasureMeanVisibleHeightFromTtmpPayloads(
+                double sourceHangulHeight = MeasureVisibleMetricsFromTtmpPayloads(
                     visualSourceFdt,
                     visualSourceFdtPath,
                     visualScaleCodepoints == null || visualScaleCodepoints.Length == 0 ? requiredCodepoints : visualScaleCodepoints,
                     payloadsByPath,
-                    mpdStream);
+                    mpdStream).MeanHeight;
                 if (targetReferenceHeight > 0d && sourceHangulHeight > 0d)
                 {
                     visualScale = (targetReferenceHeight * visualScaleSpec.HangulToReferenceRatio) / sourceHangulHeight;
@@ -2864,7 +2867,7 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             '9'
         };
 
-        private static double MeasureMeanVisibleHeightFromTtmpPayloads(
+        private static FontVisibleMetrics MeasureVisibleMetricsFromTtmpPayloads(
             byte[] fdt,
             string fdtPath,
             uint[] codepoints,
@@ -2878,7 +2881,7 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 payloadsByPath == null ||
                 mpdStream == null)
             {
-                return 0d;
+                return default(FontVisibleMetrics);
             }
 
             int fontTableOffset;
@@ -2886,11 +2889,12 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             int glyphStart;
             if (!TryGetFdtGlyphTable(fdt, out fontTableOffset, out glyphCount, out glyphStart))
             {
-                return 0d;
+                return default(FontVisibleMetrics);
             }
 
             Dictionary<string, byte[]> textures = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
             double total = 0d;
+            double bottomTotal = 0d;
             int measured = 0;
             for (int i = 0; i < codepoints.Length; i++)
             {
@@ -2952,10 +2956,13 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 }
 
                 total += maxY - minY + 1;
+                bottomTotal += glyph.OffsetY + maxY + 1;
                 measured++;
             }
 
-            return measured > 0 ? total / measured : 0d;
+            return measured > 0
+                ? new FontVisibleMetrics(total / measured, bottomTotal / measured)
+                : default(FontVisibleMetrics);
         }
 
         private static double MeasureMeanVisibleHeightFromArchive(
@@ -9749,6 +9756,18 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             {
                 TargetPath = targetPath;
                 SourcePath = sourcePath;
+            }
+        }
+
+        private struct FontVisibleMetrics
+        {
+            public readonly double MeanHeight;
+            public readonly double MeanBottom;
+
+            public FontVisibleMetrics(double meanHeight, double meanBottom)
+            {
+                MeanHeight = meanHeight;
+                MeanBottom = meanBottom;
             }
         }
 

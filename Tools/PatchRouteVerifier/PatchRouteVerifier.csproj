@@ -157,6 +157,9 @@
     <Compile Include="..\..\FFXIVPatchGenerator\DutyFinderRoleFontPatch.cs">
       <Link>Generator\DutyFinderRoleFontPatch.cs</Link>
     </Compile>
+    <Compile Include="..\..\FFXIVPatchGenerator\InventorySubtitleSpacingPatch.cs">
+      <Link>Generator\InventorySubtitleSpacingPatch.cs</Link>
+    </Compile>
     <Compile Include="..\..\FFXIVPatchGenerator\LobbyScaledHangulPhrases.cs">
       <Link>Generator\LobbyScaledHangulPhrases.cs</Link>
     </Compile>

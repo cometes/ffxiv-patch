@@ -362,7 +362,7 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
 
                         if (IsPhraseLayoutSpace(codepoint))
                         {
-                            cursor += PhraseLayoutSpaceAdvance;
+                            cursor += GetPhraseWhitespaceAdvance(fdt, codepoint);
                             previousCodepoint = codepoint;
                             hasPreviousCodepoint = true;
                             continue;

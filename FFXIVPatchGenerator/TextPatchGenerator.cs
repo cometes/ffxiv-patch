@@ -685,6 +685,9 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 }
 
                 ExcelDataFile targetExd = ExcelDataFile.Parse(targetExdBytes);
+                ColumnRemap originalJobSubtitleRemap = sheetPolicy.GetColumnRemap(1975, 0);
+                bool jobSubtitleRemapped = PrepareCharacterSelectJobSubtitle(
+                    sheetName, targetExd, globalHeader, globalArchive, sourceMaps, sheetPolicy, textSheetScopePolicy);
                 WriteDiagnosticCsvIfRequested(sheetName, page.StartId, diagnosticCsvDir, targetExd, sourceMaps, globalHeader, sourceHeader, stringColumns, allowRowKeyFallback, sheetPolicy, textSheetScopePolicy, _rsvResolver);
                 if (!textSheetScopePolicy.MayUseKorean)
                 {
@@ -698,6 +701,11 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                     sourceMaps,
                     allowRowKeyFallback,
                     stringPatchPolicy);
+                if (jobSubtitleRemapped)
+                {
+                    // This target-language snapshot must not enter the secondary-language safety pass.
+                    sheetPolicy.SetRowColumnRemap(1975, 0, originalJobSubtitleRemap);
+                }
                 string anonymizeNote = ApplyQuestChatPhraseAnonymization(sheetName, globalHeader, ref patchResult);
                 _report.ProtectedUiStrings += patchResult.ProtectedUiStrings;
                 _report.RsvRows += patchResult.RsvRows;
@@ -772,6 +780,161 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 targetLanguageId,
                 stringColumns,
                 sheetPolicy);
+        }
+
+        private bool PrepareCharacterSelectJobSubtitle(
+            string sheetName,
+            ExcelDataFile target,
+            ExcelHeader targetHeader,
+            SqPackArchive globalArchive,
+            ExdSourceMaps sourceMaps,
+            PatchSheetPolicy sheetPolicy,
+            TextSheetScopePolicy scope)
+        {
+            if (!string.Equals(sheetName, "Lobby", StringComparison.OrdinalIgnoreCase) ||
+                !scope.ShouldUseKorean(1975, 0) || sheetPolicy.ShouldKeepRow(1975) ||
+                sheetPolicy.ShouldKeepColumn(1975, 0) ||
+                sheetPolicy.GetColumnRemap(1975, 0).Mode != ColumnRemapMode.Default)
+            {
+                return false;
+            }
+
+            ExcelDataRow subtitleRow;
+            if (!target.TryGetRow(1975, out subtitleRow))
+            {
+                return false;
+            }
+
+            SourceRowRef sourceRow;
+            if (sourceMaps.RowKeyRows.TryGetValue(1975, out sourceRow))
+            {
+                byte[] sourceSubtitle = sourceRow.File.GetStringBytesByColumnOffset(sourceRow.Row, sourceRow.Header, 0);
+                if (sourceSubtitle != null && sourceSubtitle.Length != 0)
+                {
+                    return false;
+                }
+            }
+
+            // Lobby#1974's Korean primary uses ClassJob.Name; the retained #1975
+            // Sheet(ClassJob, lnum1, 0) would resolve that same translated cell.
+            // Snapshot only the subtitle's clean names, not a shared ClassJob column.
+            byte[] subtitle = target.GetStringBytesByColumnOffset(subtitleRow, targetHeader, 0);
+            byte[] expected = { 0x02, 0x28, 0x0E, 0xFF, 0x09,
+                0x43, 0x6C, 0x61, 0x73, 0x73, 0x4A, 0x6F, 0x62, 0xE8, 0x02, 0x01, 0x03 };
+            if (subtitle == null || subtitle.Length != expected.Length)
+            {
+                return false;
+            }
+            for (int i = 0; i < expected.Length; i++)
+            {
+                if (subtitle[i] != expected[i])
+                {
+                    return false;
+                }
+            }
+
+            ExcelHeader jobsHeader = ExcelHeader.Parse(globalArchive.ReadFile("exd/ClassJob.exh"));
+            if (jobsHeader.Variant != ExcelVariant.Default || jobsHeader.FindStringColumnIndexByOffset(0) < 0)
+            {
+                throw new InvalidDataException("ClassJob does not provide the character-select subtitle name column.");
+            }
+            string language = jobsHeader.HasLanguage(LanguageCodes.ToId(_options.TargetLanguage))
+                ? _options.TargetLanguage : null;
+            SortedDictionary<uint, byte[]> names = new SortedDictionary<uint, byte[]>();
+            for (int pageIndex = 0; pageIndex < jobsHeader.Pages.Count; pageIndex++)
+            {
+                ExcelDataFile jobs = ExcelDataFile.Parse(globalArchive.ReadFile(
+                    BuildExdPath("ClassJob", jobsHeader.Pages[pageIndex].StartId, language)));
+                for (int rowIndex = 0; rowIndex < jobs.Rows.Count; rowIndex++)
+                {
+                    ExcelDataRow row = jobs.Rows[rowIndex];
+                    byte[] name = jobs.GetStringBytesByColumnOffset(row, jobsHeader, 0);
+                    if (name == null)
+                    {
+                        throw new InvalidDataException("ClassJob subtitle name could not be read: " + row.RowId);
+                    }
+                    names.Add(row.RowId, name);
+                }
+            }
+            if (names.Count == 0)
+            {
+                throw new InvalidDataException("ClassJob contains no character-select subtitle names.");
+            }
+
+            sheetPolicy.SetRowColumnRemap(1975, 0, ColumnRemap.Literal(BuildCharacterSelectJobSubtitle(names)));
+            return true;
+        }
+
+        private static byte[] BuildCharacterSelectJobSubtitle(SortedDictionary<uint, byte[]> names)
+        {
+            byte[] empty = new byte[0];
+            byte[] zeroName;
+            if (!names.TryGetValue(0, out zeroName))
+            {
+                zeroName = empty;
+            }
+            uint lastRow = 0;
+            foreach (uint rowId in names.Keys)
+            {
+                lastRow = rowId;
+            }
+
+            List<byte> choices = new List<byte>();
+            choices.Add(0xE8); // lnum1
+            choices.Add(0x02);
+            for (uint rowId = 1; rowId <= lastRow; rowId++)
+            {
+                byte[] name;
+                AppendSubtitleString(choices, names.TryGetValue(rowId, out name) ? name : empty);
+            }
+            // Switch is one-based; zero selects its first case and an out-of-range
+            // value has no branch. Guard both rather than falling back to translated Sheet.
+            List<byte> bounded = new List<byte> { 0xE2, 0xE8, 0x02 }; // lnum1 <= lastRow
+            AppendSubtitleUInt(bounded, lastRow);
+            AppendSubtitleString(bounded, lastRow == 0 ? empty : BuildSubtitlePayload(0x09, choices));
+            AppendSubtitleString(bounded, empty);
+            List<byte> result = new List<byte> { 0xE4, 0xE8, 0x02, 0x01 }; // lnum1 == 0
+            AppendSubtitleString(result, zeroName);
+            AppendSubtitleString(result, BuildSubtitlePayload(0x08, bounded));
+            return BuildSubtitlePayload(0x08, result);
+        }
+
+        private static byte[] BuildSubtitlePayload(byte type, List<byte> body)
+        {
+            List<byte> result = new List<byte>(body.Count + 8) { 0x02, type };
+            AppendSubtitleUInt(result, checked((uint)body.Count));
+            result.AddRange(body);
+            result.Add(0x03);
+            return result.ToArray();
+        }
+
+        private static void AppendSubtitleString(List<byte> output, byte[] value)
+        {
+            output.Add(0xFF);
+            AppendSubtitleUInt(output, checked((uint)value.Length));
+            output.AddRange(value);
+        }
+
+        private static void AppendSubtitleUInt(List<byte> output, uint value)
+        {
+            if (value < 0xCF)
+            {
+                output.Add((byte)(value + 1));
+                return;
+            }
+            int markerIndex = output.Count;
+            output.Add(0);
+            byte marker = 0xF0;
+            for (int shift = 24; shift >= 0; shift -= 8)
+            {
+                byte part = (byte)(value >> shift);
+                if (part != 0)
+                {
+                    marker |= (byte)(1 << (shift / 8));
+                    output.Add(part);
+                }
+            }
+            output[markerIndex] = (byte)(marker - 1);
         }
 
         private void PatchSecondaryLanguageSafetyRows(

@@ -6,11 +6,12 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
         {
             private static void DrawGlyphToBitmap(System.Drawing.Bitmap bitmap, GlyphCanvas canvas, int originX, int originY, int scale)
             {
-                for (int y = 0; y < GlyphCanvasSize; y++)
+                int canvasSize = GetGlyphCanvasSize(canvas.Alpha);
+                for (int y = 0; y < canvasSize; y++)
                 {
-                    for (int x = 0; x < GlyphCanvasSize; x++)
+                    for (int x = 0; x < canvasSize; x++)
                     {
-                        byte alpha = canvas.Alpha[y * GlyphCanvasSize + x];
+                        byte alpha = canvas.Alpha[y * canvasSize + x];
                         if (alpha == 0)
                         {
                             continue;

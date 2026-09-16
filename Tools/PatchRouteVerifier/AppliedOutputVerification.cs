@@ -496,6 +496,7 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
             private static string[] CollectAppliedOptionalUiPaths()
             {
                 HashSet<string> paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                AddAppliedValues(paths, InventorySubtitleSpacingPatch.UldPaths);
                 for (int i = 0; i < StartScreenSystemSettingsUldCandidates.Length; i++)
                 {
                     paths.Add(StartScreenSystemSettingsUldCandidates[i].Path);

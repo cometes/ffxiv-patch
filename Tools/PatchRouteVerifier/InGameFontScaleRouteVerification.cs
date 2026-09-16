@@ -19,7 +19,7 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
             private const uint DutyFinderJobNameNodeId = DutyFinderRoleFontPatch.JobNameNodeId;
             private const int ScaleRouteFailureLimit = 16;
 
-            private static readonly int[] InGameUiScalePercents = new int[] { 100, 150, 200, 300 };
+            private static readonly int[] InGameUiScalePercents = new int[] { 100, 150, 200, 300, 400 };
             private static readonly string[] DutyFinderJobNamePhrases = new string[]
             {
                 "\uAC74\uBE0C\uB808\uC774\uCEE4",
@@ -46,7 +46,17 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
 
                 using (StreamWriter writer = CreateUtf8Writer(reportPath))
                 {
-                    writer.WriteLine("area\tuld\tnode_offset\tcontainer_type\tcontainer_id\tnode_id\tfont_id\tfont_size\tfont_100\tfont_150\tfont_200\tfont_300\tstatus");
+                    List<string> columns = new List<string>
+                    {
+                        "area", "uld", "node_offset", "container_type", "container_id",
+                        "node_id", "font_id", "font_size"
+                    };
+                    for (int scaleIndex = 0; scaleIndex < InGameUiScalePercents.Length; scaleIndex++)
+                    {
+                        columns.Add("font_" + InGameUiScalePercents[scaleIndex].ToString());
+                    }
+                    columns.Add("status");
+                    WriteTsvRow(writer, columns.ToArray());
                     for (int candidateIndex = 0; candidateIndex < InGameFontRiskUldCandidates.Length; candidateIndex++)
                     {
                         InGameUldCandidate candidate = InGameFontRiskUldCandidates[candidateIndex];
@@ -99,8 +109,8 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
                                 visualScaleCoverageGaps++;
                             }
 
-                            WriteTsvRow(
-                                writer,
+                            List<string> row = new List<string>(columns.Count)
+                            {
                                 candidate.Area,
                                 candidate.Path,
                                 "0x" + node.NodeOffset.ToString("X"),
@@ -108,12 +118,11 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
                                 node.ContainerId.ToString(),
                                 node.NodeId.ToString(),
                                 node.FontId.ToString(),
-                                node.FontSize.ToString(),
-                                routes[0],
-                                routes[1],
-                                routes[2],
-                                routes[3],
-                                unresolved ? "unmapped" : coverageGap ? "visual-scale-coverage-gap" : "ok");
+                                node.FontSize.ToString()
+                            };
+                            row.AddRange(routes);
+                            row.Add(unresolved ? "unmapped" : coverageGap ? "visual-scale-coverage-gap" : "ok");
+                            WriteTsvRow(writer, row.ToArray());
                             textNodes++;
                         }
                     }
@@ -122,6 +131,7 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
                 HashSet<uint> visualScaleCodepoints = CollectActionDetailHighScaleHangulCodepointSet();
                 int coveredGlyphs = VerifyLargeUiVisualScaleTierCoverage(visualScaleCodepoints);
                 VerifyDutyFinderRoleFontScale();
+                VerifyInventorySubtitleSpacing();
                 if (unresolvedRoutes > 0)
                 {
                     Fail("In-game UI-scale route model has {0} unmapped text nodes; see {1}", unresolvedRoutes, reportPath);
@@ -229,6 +239,94 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
                 }
 
                 return covered;
+            }
+
+            private void VerifyInventorySubtitleSpacing()
+            {
+                Console.WriteLine("[ULD] Inventory subtitle spacing");
+                for (int pathIndex = 0; pathIndex < InventorySubtitleSpacingPatch.UldPaths.Length; pathIndex++)
+                {
+                    VerifyInventorySubtitleSpacing(InventorySubtitleSpacingPatch.UldPaths[pathIndex]);
+                }
+            }
+
+            private void VerifyInventorySubtitleSpacing(string uldPath)
+            {
+                byte[] cleanUld;
+                byte[] patchedUld;
+                try
+                {
+                    byte[] cleanPacked;
+                    byte[] patchedPacked;
+                    bool cleanPresent = _cleanUi.TryReadPackedFile(uldPath, out cleanPacked);
+                    bool patchedPresent = _patchedUi.TryReadPackedFile(uldPath, out patchedPacked);
+                    if (!cleanPresent && !patchedPresent)
+                    {
+                        Pass("{0} inventory subtitle spacing skipped; optional variant absent from both UI archives", uldPath);
+                        return;
+                    }
+
+                    if (!cleanPresent || !patchedPresent)
+                    {
+                        Fail("{0} inventory subtitle spacing archive mismatch: clean={1}, patched={2}",
+                            uldPath, cleanPresent, patchedPresent);
+                        return;
+                    }
+
+                    cleanUld = SqPackArchive.UnpackStandardFile(cleanPacked);
+                    patchedUld = SqPackArchive.UnpackStandardFile(patchedPacked);
+                }
+                catch (Exception ex)
+                {
+                    Fail("{0} inventory subtitle spacing read error: {1}", uldPath, ex.Message);
+                    return;
+                }
+
+                int cleanNodeOffset;
+                int patchedNodeOffset;
+                string locatorError;
+                if (!InventorySubtitleSpacingPatch.TryFindSubtitleTextNode(cleanUld, out cleanNodeOffset, out locatorError))
+                {
+                    Fail("{0} clean inventory title/subtitle contract failed: {1}", uldPath, locatorError);
+                    return;
+                }
+
+                if (!InventorySubtitleSpacingPatch.TryFindSubtitleTextNode(patchedUld, out patchedNodeOffset, out locatorError))
+                {
+                    Fail("{0} patched inventory title/subtitle contract failed: {1}", uldPath, locatorError);
+                    return;
+                }
+
+                if (cleanUld.Length != patchedUld.Length || cleanNodeOffset != patchedNodeOffset)
+                {
+                    Fail("{0} inventory subtitle ULD structure changed: length={1}/{2}, node=0x{3:X}/0x{4:X}",
+                        uldPath, cleanUld.Length, patchedUld.Length, cleanNodeOffset, patchedNodeOffset);
+                    return;
+                }
+
+                int xOffset = cleanNodeOffset + UldNodeXOffset;
+                short cleanX = unchecked((short)Endian.ReadUInt16LE(cleanUld, xOffset));
+                short patchedX = unchecked((short)Endian.ReadUInt16LE(patchedUld, xOffset));
+                if (cleanX != InventorySubtitleSpacingPatch.SourceX || patchedX != InventorySubtitleSpacingPatch.TargetX)
+                {
+                    Fail("{0} inventory subtitle X expected {1}->{2}, found {3}->{4}",
+                        uldPath, InventorySubtitleSpacingPatch.SourceX, InventorySubtitleSpacingPatch.TargetX,
+                        cleanX, patchedX);
+                    return;
+                }
+
+                for (int offset = 0; offset < cleanUld.Length; offset++)
+                {
+                    if (offset != xOffset && offset != xOffset + 1 && cleanUld[offset] != patchedUld[offset])
+                    {
+                        Fail("{0} inventory subtitle spacing changed an unrelated byte at 0x{1:X}: {2:X2}->{3:X2}",
+                            uldPath, offset, cleanUld[offset], patchedUld[offset]);
+                        return;
+                    }
+                }
+
+                Pass("{0} inventory subtitle X {1}->{2}; title, fonts, vertical baseline, bindings and all other ULD bytes unchanged",
+                    uldPath, cleanX, patchedX);
             }
 
             private void VerifyDutyFinderRoleFontScale()
@@ -352,11 +450,13 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
                     "common/font/AXIS_12.fdt",
                     "common/font/AXIS_18.fdt",
                     "common/font/AXIS_18.fdt",
+                    "common/font/AXIS_36.fdt",
                     "common/font/AXIS_36.fdt"
                 };
                 string[] expectedJobRoutes = new string[]
                 {
                     "common/font/Jupiter_23.fdt",
+                    "common/font/Jupiter_46.fdt",
                     "common/font/Jupiter_46.fdt",
                     "common/font/Jupiter_46.fdt",
                     "common/font/Jupiter_46.fdt"
@@ -880,6 +980,7 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
                     "common/font/AXIS_12.fdt",
                     "common/font/AXIS_18.fdt",
                     "common/font/AXIS_18.fdt",
+                    "common/font/AXIS_36.fdt",
                     "common/font/AXIS_36.fdt"
                 };
 

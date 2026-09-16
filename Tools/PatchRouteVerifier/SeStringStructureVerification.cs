@@ -112,7 +112,7 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
             return true;
         }
 
-        private static bool TryReadExpressionUInt32(
+        internal static bool TryReadExpressionUInt32(
             byte[] bytes,
             int offset,
             int end,

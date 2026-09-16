@@ -285,7 +285,7 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
 
                         if (IsPhraseLayoutSpace(codepoint))
                         {
-                            cursor += PhraseLayoutSpaceAdvance;
+                            cursor += GetPhraseWhitespaceAdvance(fdt, codepoint);
                             previousCodepoint = codepoint;
                             hasPreviousCodepoint = true;
                             continue;
@@ -321,10 +321,11 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
 
             private static void AddPhraseGlyphPixels(Dictionary<long, byte> pixels, int cursor, byte[] alpha)
             {
-                for (int y = 0; y < GlyphCanvasSize; y++)
+                int canvasSize = GetGlyphCanvasSize(alpha);
+                for (int y = 0; y < canvasSize; y++)
                 {
-                    int rowOffset = y * GlyphCanvasSize;
-                    for (int x = 0; x < GlyphCanvasSize; x++)
+                    int rowOffset = y * canvasSize;
+                    for (int x = 0; x < canvasSize; x++)
                     {
                         byte value = alpha[rowOffset + x];
                         if (value == 0)

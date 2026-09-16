@@ -33,6 +33,7 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
                     new VerificationStep("compact-time", VerifyCompactTimeRows),
                     new VerificationStep("world-visit", VerifyWorldVisitRows),
                     new VerificationStep("configuration-sharing", VerifyConfigurationSharingRows),
+                    new VerificationStep("character-select-job-subtitle", VerifyCharacterSelectJobSubtitle),
                     new VerificationStep("bozja-entrance", VerifyBozjaEntranceRows),
                     new VerificationStep("rsv-auto-translate-delimiters", VerifyRsvAutoTranslateDelimiters),
                     new VerificationStep("occult-crescent-support-jobs", VerifyOccultCrescentSupportJobRows),

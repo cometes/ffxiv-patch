@@ -11,8 +11,13 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
                 const int scale = 2;
                 const int columns = 6;
                 const int labelHeight = 18;
-                int cellWidth = GlyphCanvasSize * scale;
-                int cellHeight = GlyphCanvasSize * scale + labelHeight;
+                int canvasSize = GlyphCanvasSize;
+                for (int i = 0; i < glyphs.Count; i++)
+                {
+                    canvasSize = System.Math.Max(canvasSize, GetGlyphCanvasSize(glyphs[i].Alpha));
+                }
+                int cellWidth = canvasSize * scale;
+                int cellHeight = canvasSize * scale + labelHeight;
                 int rows = (glyphs.Count + columns - 1) / columns;
                 using (System.Drawing.Bitmap bitmap = new System.Drawing.Bitmap(cellWidth * columns, cellHeight * rows, System.Drawing.Imaging.PixelFormat.Format32bppArgb))
                 {

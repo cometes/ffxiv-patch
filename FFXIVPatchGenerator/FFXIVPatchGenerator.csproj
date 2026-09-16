@@ -45,6 +45,7 @@
     <Compile Include="SharedUi100PercentHangulGlyphs.cs" />
     <Compile Include="PartyBonusRoleFontPatch.cs" />
     <Compile Include="DutyFinderRoleFontPatch.cs" />
+    <Compile Include="InventorySubtitleSpacingPatch.cs" />
     <Compile Include="LobbyScaledHangulPhrases.cs" />
     <Compile Include="LobbyHangulCoverage.cs" />
     <Compile Include="UiPatchGenerator.cs" />

@@ -96,6 +96,8 @@
 - 직업명: `ClassJob#20` 몽크, `ClassJob#37` 건브레이커, `ClassJob#42` 픽토맨서
 - 생일/월: `Lobby#41`~`Lobby#53` 그림자/별빛 월 문자열
 - 수호성: `Lobby#160` 니메이아 외 로비 row, `GuardianDeity` 전체는 설명문이 길어 glyph coverage 범위로 바로 쓰지 않는다.
+- 캐릭터 선택 직업 주제/부제의 실제 데이터 의존성(2026-09-15): JA `Lobby#1974`는 `Sheet(ClassJob, lnum1, 30)`을 쓰고 KO1974는 레벨과 `Sheet(ClassJob, lnum1, 0)`을 쓴다. JA1975도 column0을 읽고 KO1975는 빈 값이므로, 번역된 ClassJob.Name을 두 번 표시하는 문제가 생긴다. 원문 템플릿 보존만으로는 원문 직업명이 보존되지 않는다.
+- 현재 보정은 해당 JA1975 템플릿의 clean 직업명을 동적 선택 문구로 저장한다. ClassJob 필드, KO 주제, EN의 빈 부제, 다른 언어 페이지·명시적 정책은 보존한다. public `CharaSelect_Info.uld`의 제목 노드는 TextId0으로 동적 배정이며, 정확한 네이티브 배정 순서까지 추적한 것은 아니다. 이 문서화된 텍스트 의존성 때문에 Lobby EXD만 수정하며 로비 폰트·ULD에는 손대지 않는다.
 - 로그인 오류: `Error#13206` 순차적으로 로그인 처리
 
 ## 다음 조사/구현 규칙

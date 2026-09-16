@@ -280,6 +280,9 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 addonPolicy.SetRowColumnRemap(ConfigShareAddonSubtitleRows[i], 0, ColumnRemap.Literal(string.Empty));
             }
 
+            // Keep the repeated rank-up label's exclamation clear of the final Hangul glyph.
+            addonPolicy.SetRowColumnRemap(17888, 0, ColumnRemap.Literal("\uB9C8\uC218 \uB7AD\uD06C \uC5C5 !"));
+
             // Occult Crescent HUDs consume MkdSupportJob name columns in multiple
             // places. Columns 0 and 4 are the full/short main phantom-job labels
             // used by HUD variants; descriptive/support-action text remains
@@ -929,6 +932,11 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
         public static ColumnRemap Literal(string value)
         {
             return new ColumnRemap(ColumnRemapMode.Literal, null, new UTF8Encoding(false).GetBytes(value ?? string.Empty), null, null);
+        }
+
+        public static ColumnRemap Literal(byte[] value)
+        {
+            return new ColumnRemap(ColumnRemapMode.Literal, null, value, null, null);
         }
 
         public static ColumnRemap TemplateAroundFirstPayload(string prefix, string suffix)

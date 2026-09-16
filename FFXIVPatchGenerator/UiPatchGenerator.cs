@@ -168,6 +168,11 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                         mutableIndex,
                         mutableIndex2,
                         datWriter);
+                    patched += PatchInventorySubtitleSpacing(
+                        globalUiArchive,
+                        mutableIndex,
+                        mutableIndex2,
+                        datWriter);
                 }
                 // Keep data-center lobby ULD font slots byte-for-byte clean.
                 // The font patch preserves the clean global glyph route instead.
@@ -334,6 +339,32 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                     DutyFinderRoleFontPatch.SourceFontSize,
                     DutyFinderRoleFontPatch.TargetFontId,
                     DutyFinderRoleFontPatch.TargetFontSize);
+                patched++;
+            }
+
+            return patched;
+        }
+
+        private static int PatchInventorySubtitleSpacing(
+            SqPackArchive globalUiArchive,
+            SqPackIndexFile mutableIndex,
+            SqPackIndex2File mutableIndex2,
+            SqPackDatWriter datWriter)
+        {
+            int patched = 0;
+            for (int pathIndex = 0; pathIndex < InventorySubtitleSpacingPatch.UldPaths.Length; pathIndex++)
+            {
+                string uldPath = InventorySubtitleSpacingPatch.UldPaths[pathIndex];
+                byte[] sourceUld = globalUiArchive.ReadFile(uldPath);
+                byte[] patchedUld = InventorySubtitleSpacingPatch.Apply(uldPath, sourceUld);
+                long offset = datWriter.WriteStandardFile(patchedUld);
+                mutableIndex.SetFileOffset(uldPath, PatchDatId, offset);
+                mutableIndex2.SetFileOffset(uldPath, PatchDatId, offset);
+                Console.WriteLine(
+                    "UI ULD patched: {0} inventory subtitle X {1} -> {2}",
+                    uldPath,
+                    InventorySubtitleSpacingPatch.SourceX,
+                    InventorySubtitleSpacingPatch.TargetX);
                 patched++;
             }
 
