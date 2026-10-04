@@ -700,7 +700,8 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                     stringColumns,
                     sourceMaps,
                     allowRowKeyFallback,
-                    stringPatchPolicy);
+                    stringPatchPolicy,
+                    LoadNameFormReferencePage(sheetName, page, globalHeader, globalArchive, targetUsesLanguageSuffix));
                 if (jobSubtitleRemapped)
                 {
                     // This target-language snapshot must not enter the secondary-language safety pass.
@@ -714,6 +715,8 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 _report.RsvResolvedStrings += patchResult.RsvResolvedStrings;
                 _report.RsvTokensResolved += patchResult.RsvTokensResolved;
                 _report.RsvTokensUnresolved += patchResult.RsvTokensUnresolved;
+                _report.NameFormStringsApplied += patchResult.NameFormStringsApplied;
+                _report.NameFormStringsSkipped += patchResult.NameFormStringsSkipped;
 
                 if (!patchResult.Changed)
                 {
@@ -780,6 +783,39 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 targetLanguageId,
                 stringColumns,
                 sheetPolicy);
+        }
+
+        // Korean text is translated from Japanese, so the Japanese page is the most faithful source of
+        // where the player is called by first or last name. English often rephrases or drops the name.
+        private ExcelDataFile LoadNameFormReferencePage(
+            string sheetName,
+            ExcelPageDefinition page,
+            ExcelHeader globalHeader,
+            SqPackArchive globalArchive,
+            bool targetUsesLanguageSuffix)
+        {
+            const string referenceLanguage = "ja";
+            if (!targetUsesLanguageSuffix ||
+                string.Equals(_options.TargetLanguage, referenceLanguage, StringComparison.OrdinalIgnoreCase) ||
+                !globalHeader.HasLanguage(LanguageCodes.ToId(referenceLanguage)))
+            {
+                return null;
+            }
+
+            byte[] referenceBytes;
+            if (!globalArchive.TryReadFile(BuildExdPath(sheetName, page.StartId, referenceLanguage), out referenceBytes))
+            {
+                return null;
+            }
+
+            try
+            {
+                return ExcelDataFile.Parse(referenceBytes);
+            }
+            catch (InvalidDataException)
+            {
+                return null;
+            }
         }
 
         private bool PrepareCharacterSelectJobSubtitle(

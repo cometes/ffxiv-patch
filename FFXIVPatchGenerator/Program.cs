@@ -53,6 +53,8 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 Console.WriteLine("  RSV tokens unresolved:{0}", report.RsvTokensUnresolved);
                 Console.WriteLine("  Say quest phrases:    {0}", report.QuestChatPhrasesAnonymized);
                 Console.WriteLine("  Say quest rows:       {0}", report.QuestChatRowsAnonymized);
+                Console.WriteLine("  Name forms applied:   {0}", report.NameFormStringsApplied);
+                Console.WriteLine("  Name forms kept full: {0}", report.NameFormStringsSkipped);
                 Console.WriteLine("  Pages without mapping:{0}", report.PagesSkippedNoMapping);
                 Console.WriteLine("  Missing source pages: {0}", report.MissingSourcePages);
                 Console.WriteLine("  Missing target pages: {0}", report.MissingTargetPages);
@@ -563,6 +565,8 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
         public int RsvTokensUnresolved;
         public int QuestChatPhrasesAnonymized;
         public int QuestChatRowsAnonymized;
+        public int NameFormStringsApplied;
+        public int NameFormStringsSkipped;
         public int PagesSkippedNoMapping;
         public int MissingSourcePages;
         public int MissingTargetPages;
