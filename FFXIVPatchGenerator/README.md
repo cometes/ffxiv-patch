@@ -84,6 +84,7 @@ UI가 release 폴더를 적용할 때는 별도로 `manifest.json`을 생성해 
 - `Addon` row `876`, `2338`, `6166`은 SeString 내부 길이값을 깨지 않도록 글로벌 영어 템플릿을 사용합니다. 버프/남은시간 UI에서 `시간`, `분`이 좁은 영역 밖으로 나가는 문제를 줄이기 위한 예외입니다.
 - `Addon` row `10952`는 파티 리스트 본인 표시 glyph가 한글 폰트 적용 후 `=`로 보이는 문제를 피하기 위해 대상 글로벌 언어의 원본 PUA 토큰을 유지합니다. 또한 본인 표시 번호를 1~8로 바꾸는 설정을 고려해 패치되는 각 FDT에는 본인 번호 전용 PUA glyph `U+E0E1`~`U+E0E8`을 같은 FDT의 박스형 번호 glyph `U+E0B1`~`U+E0B8` 좌표로 alias합니다. 인스턴스/legacy circled marker로 쓰이는 `U+E0B1`~`U+E0B8` 자체는 alias 소스 모양을 유지한 채 clean cell/base+mip 보호 대상으로 검증합니다. 추가 PUA는 수동 나열 대신 각 보호 route에서 clean/source와 patched target 양쪽에 존재하는 glyph를 자동 수집해 같은 방식으로 보호합니다.
 - `--anonymize-quest-chat-phrases`는 현재 비활성화/no-op입니다. `quest/*` sheet 커버리지가 불완전하므로 기존 익명화 구현은 feature gate 뒤에 보존하고, UI 전체 패치에서는 더 이상 자동으로 켜지지 않습니다.
+- `--global-player-name-forms`를 지정하면 한국 서버 대사의 풀네임 매크로 `<String(gstr(1))>`를 글로벌 일본어 원문의 `<Split(<String(gstr(1))>, " ", 1|2)>` 호칭(이름/성)으로 바꿉니다. 한국어 대사는 일본어 원문을 따르므로 영어 베이스(`--target-language en`)에서도 일본어 EXD를 기준으로 합니다. 원문 호칭이 한 종류면 모든 이름 참조에, 섞여 있으면 참조 수가 같을 때만 순서대로 적용하며 그 외에는 풀네임을 유지합니다. 한국어 조사 매크로(`Josa`)의 주어 인자도 같은 호칭으로 바꿔 조사가 출력되는 이름에 맞게 선택됩니다.
 - `--rsv-map <file>`을 지정하면 RSV token JSON map을 읽어 한국 서버 source row의 `_rsv_...` 토큰을 실제 문자열로 치환합니다. 지정하지 않으면 실행 파일 옆 `rsv.json`, 현재 작업 디렉터리 `rsv.json` 순서로 자동 탐색합니다.
 - 데이터센터 화면의 한글 proxy glyph 방식은 FDT/텍스처 atlas 불일치 시 읽을 수 없는 글자로 노출될 수 있어 릴리즈 기본값에서 제외했습니다.
 - `ExcelVariant.Default` sheet만 처리합니다.

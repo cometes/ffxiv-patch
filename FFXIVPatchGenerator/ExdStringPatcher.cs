@@ -33,6 +33,21 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             bool allowRowKeyFallback,
             StringPatchPolicy patchPolicy)
         {
+            return PatchDefaultVariant(target, targetHeader, sourceHeader, stringColumns, sourceMaps, allowRowKeyFallback, patchPolicy, null);
+        }
+
+        // nameFormReference: the same page in the global language whose player name forms should be
+        // copied (Japanese, which the Korean text follows). Null uses the target page itself.
+        public static ExdPatchResult PatchDefaultVariant(
+            ExcelDataFile target,
+            ExcelHeader targetHeader,
+            ExcelHeader sourceHeader,
+            List<int> stringColumns,
+            ExdSourceMaps sourceMaps,
+            bool allowRowKeyFallback,
+            StringPatchPolicy patchPolicy,
+            ExcelDataFile nameFormReference)
+        {
             if (sourceMaps == null)
             {
                 sourceMaps = new ExdSourceMaps();
@@ -87,7 +102,7 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 {
                     try
                     {
-                        rowResult = PatchRow(target, targetHeader, sourceHeader, stringColumns, row, plan.SourceRow, patchPolicy);
+                        rowResult = PatchRow(target, targetHeader, sourceHeader, stringColumns, row, plan.SourceRow, patchPolicy, nameFormReference);
                     }
                     catch
                     {
@@ -105,6 +120,8 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                     result.RsvResolvedStrings += rowResult.RsvResolvedStrings;
                     result.RsvTokensResolved += rowResult.RsvTokensResolved;
                     result.RsvTokensUnresolved += rowResult.RsvTokensUnresolved;
+                    result.NameFormStringsApplied += rowResult.NameFormStringsApplied;
+                    result.NameFormStringsSkipped += rowResult.NameFormStringsSkipped;
                 }
 
                 if (rowResult != null && rowResult.Touched)
@@ -396,7 +413,8 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             List<int> stringColumns,
             ExcelDataRow targetRow,
             SourceRowRef sourceRow,
-            StringPatchPolicy patchPolicy)
+            StringPatchPolicy patchPolicy,
+            ExcelDataFile nameFormReference)
         {
             PatchSheetPolicy sheetPolicy = patchPolicy == null ? PatchSheetPolicy.Empty : patchPolicy.SheetPolicy;
             int rowOffset = checked((int)targetRow.Offset);
@@ -430,6 +448,8 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             int rsvTokensUnresolved = 0;
             bool rowHasRsv = false;
             bool rowHasResolvedRsv = false;
+            int nameFormsApplied = 0;
+            int nameFormsSkipped = 0;
             MemoryStream stringData = new MemoryStream();
             for (int i = 0; i < stringColumns.Count; i++)
             {
@@ -512,7 +532,31 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                         {
                             selected = replacement;
                             allowRsvResolution = !sheetPolicy.ShouldUseGlobalFallbackRow(targetRow.RowId);
-                            if (!BytesEqual(original, replacement))
+                            if (patchPolicy != null &&
+                                patchPolicy.TransferGlobalPlayerNameForms &&
+                                !forceReplacement &&
+                                !sheetPolicy.ShouldUseGlobalFallbackRow(targetRow.RowId))
+                            {
+                                byte[] nameReference = null;
+                                if (nameFormReference != null)
+                                {
+                                    nameReference = nameFormReference.GetStringBytes(targetRow.RowId, targetHeader, columnIndex);
+                                }
+
+                                byte[] named;
+                                PlayerNameFormTransferStatus nameStatus = PlayerNameFormTransfer.Apply(nameReference ?? original, replacement, out named);
+                                if (nameStatus == PlayerNameFormTransferStatus.Applied)
+                                {
+                                    selected = named;
+                                    nameFormsApplied++;
+                                }
+                                else if (nameStatus != PlayerNameFormTransferStatus.NotApplicable)
+                                {
+                                    nameFormsSkipped++;
+                                }
+                            }
+
+                            if (!BytesEqual(original, selected))
                             {
                                 touched = true;
                             }
@@ -563,7 +607,7 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
 
             if (!touched)
             {
-                return new RowPatchResult(
+                RowPatchResult untouchedResult = new RowPatchResult(
                     CopyOriginalRowRecord(target, targetRow),
                     false,
                     protectedUiStrings,
@@ -573,6 +617,8 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                     rsvResolvedStrings,
                     rsvTokensResolved,
                     rsvTokensUnresolved);
+                untouchedResult.NameFormStringsSkipped = nameFormsSkipped;
+                return untouchedResult;
             }
 
             byte[] strings = stringData.ToArray();
@@ -596,7 +642,7 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 throw new InvalidDataException("Unexpected empty EXD row.");
             }
 
-            return new RowPatchResult(
+            RowPatchResult patchedResult = new RowPatchResult(
                 rowOutput.ToArray(),
                 true,
                 protectedUiStrings,
@@ -606,6 +652,9 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 rsvResolvedStrings,
                 rsvTokensResolved,
                 rsvTokensUnresolved);
+            patchedResult.NameFormStringsApplied = nameFormsApplied;
+            patchedResult.NameFormStringsSkipped = nameFormsSkipped;
+            return patchedResult;
         }
 
         private static bool ShouldKeepOriginalForUiStructure(StringPatchPolicy patchPolicy, byte[] original, byte[] replacement)
@@ -1465,6 +1514,8 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             public readonly int RsvResolvedStrings;
             public readonly int RsvTokensResolved;
             public readonly int RsvTokensUnresolved;
+            public int NameFormStringsApplied;
+            public int NameFormStringsSkipped;
 
             public RowPatchResult(
                 byte[] data,
@@ -1530,6 +1581,8 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
         public int RsvResolvedStrings;
         public int RsvTokensResolved;
         public int RsvTokensUnresolved;
+        public int NameFormStringsApplied;
+        public int NameFormStringsSkipped;
     }
 
     internal sealed class StringPatchPolicy
@@ -1543,6 +1596,7 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
         public readonly PatchSheetPolicy SheetPolicy;
         public readonly RsvStringResolver RsvResolver;
         public readonly TextSheetScopePolicy TextSheetScopePolicy;
+        public readonly bool TransferGlobalPlayerNameForms;
 
         public StringPatchPolicy(bool protectShortNonKoreanUiTokens, PatchSheetPolicy sheetPolicy)
             : this(protectShortNonKoreanUiTokens, protectShortNonKoreanUiTokens, sheetPolicy)
@@ -1575,7 +1629,8 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             bool protectUiSeStringStructure,
             PatchSheetPolicy sheetPolicy,
             RsvStringResolver rsvResolver,
-            TextScopePolicy textScopePolicy)
+            TextScopePolicy textScopePolicy,
+            bool transferGlobalPlayerNameForms = false)
         {
             SheetName = sheetName;
             ProtectShortNonKoreanUiTokens = protectShortNonKoreanUiTokens;
@@ -1583,6 +1638,7 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             SheetPolicy = sheetPolicy ?? PatchSheetPolicy.Empty;
             RsvResolver = rsvResolver ?? RsvStringResolver.Empty;
             TextSheetScopePolicy = (textScopePolicy ?? TextScopePolicy.CreateFull()).ForSheet(sheetName);
+            TransferGlobalPlayerNameForms = transferGlobalPlayerNameForms;
         }
     }
 

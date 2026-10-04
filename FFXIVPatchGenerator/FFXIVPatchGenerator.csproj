@@ -56,6 +56,7 @@
     <Compile Include="QuestChatPhraseAnonymizer.cs" />
     <Compile Include="HashAndEndian.cs" />
     <Compile Include="PatchPolicy.cs" />
+    <Compile Include="PlayerNameFormTransfer.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="FontPatchAssets\TTMPD.mpd" Condition="Exists('FontPatchAssets\TTMPD.mpd')">

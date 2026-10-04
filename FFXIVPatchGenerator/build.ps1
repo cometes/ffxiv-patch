@@ -31,7 +31,8 @@ $sources = @(
     "RsvStringResolver.cs",
     "QuestChatPhraseAnonymizer.cs",
     "HashAndEndian.cs",
-    "PatchPolicy.cs"
+    "PatchPolicy.cs",
+    "PlayerNameFormTransfer.cs"
 ) | ForEach-Object { Join-Path $PSScriptRoot $_ }
 
 $exePath = Join-Path $outDir "FFXIVPatchGenerator.exe"

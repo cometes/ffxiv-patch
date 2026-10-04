@@ -151,6 +151,8 @@ namespace FFXIVKoreanPatch.Main
         private bool preserveBasePlaceNames;
         private bool preserveBaseRemainderText;
         private bool preserveBaseUiAssets;
+        // Korean text always prints the full name; this restores the global first/last name forms.
+        private bool globalPlayerNameForms = true;
         private static readonly string[] outcomeSettingKeys =
             { "story", "bnpc", "actions", "duty", "item", "place", "common", "remainder", "uiAssets" };
         private bool[] customDraft = new bool[9];
@@ -257,6 +259,11 @@ namespace FFXIVKoreanPatch.Main
         public bool PreserveBaseUiAssets
         {
             get { return preserveBaseUiAssets; }
+        }
+
+        public bool GlobalPlayerNameForms
+        {
+            get { return globalPlayerNameForms; }
         }
 
         private bool IsWorkActive
@@ -932,6 +939,13 @@ namespace FFXIVKoreanPatch.Main
                 targetLanguageDisplayName = targetLanguageCode == "en" ? "영어" : "일본어";
             }
 
+            if (settings.TryGetValue("playerNameForms", out value))
+            {
+                if (string.Equals(value, "global", StringComparison.OrdinalIgnoreCase)) globalPlayerNameForms = true;
+                else if (string.Equals(value, "full", StringComparison.OrdinalIgnoreCase)) globalPlayerNameForms = false;
+                else throw new FormatException(path + ": playerNameForms는 global 또는 full이어야 합니다.");
+            }
+
             string loadedProfile;
             settings.TryGetValue("textProfile", out loadedProfile);
             if (loadedProfile != null &&
@@ -1080,7 +1094,8 @@ namespace FFXIVKoreanPatch.Main
                 var lines = new List<string>
                 {
                     "targetLanguage=" + targetLanguageCode,
-                    "textProfile=" + textProfile
+                    "textProfile=" + textProfile,
+                    "playerNameForms=" + FormatPlayerNameForms()
                 };
                 bool[] outcomes = GetScopeOutcomes();
                 for (int i = 0; i < outcomes.Length; i++)
@@ -1129,6 +1144,11 @@ namespace FFXIVKoreanPatch.Main
             return preserveBase ? "base" : "ko";
         }
 
+        private string FormatPlayerNameForms()
+        {
+            return globalPlayerNameForms ? "global" : "full";
+        }
+
         private string GetTextScopeOutcomesArgument()
         {
             return "story=" + FormatScopeOutcome(preserveBaseStoryText) +
@@ -1154,6 +1174,11 @@ namespace FFXIVKoreanPatch.Main
                 arguments += " --skip-ui-texture-fix";
             }
 
+            if (globalPlayerNameForms)
+            {
+                arguments += " --global-player-name-forms";
+            }
+
             return arguments;
         }
 
@@ -1168,7 +1193,8 @@ namespace FFXIVKoreanPatch.Main
                    ", PlaceNames=" + FormatScopeOutcome(preserveBasePlaceNames) +
                    ", CommonPhrases=" + FormatScopeOutcome(preserveBaseCommonPhrases) +
                    ", Remainder=" + FormatScopeOutcome(preserveBaseRemainderText) +
-                   ", UIAssets=" + FormatScopeOutcome(preserveBaseUiAssets);
+                   ", UIAssets=" + FormatScopeOutcome(preserveBaseUiAssets) +
+                   ", PlayerNameForms=" + FormatPlayerNameForms();
         }
 
         private string GetTextProfileDisplayName()
@@ -2533,6 +2559,7 @@ namespace FFXIVKoreanPatch.Main
             AppendJsonString(sb, "textScopeOutcomes", buildTextPatch ? GetTextScopeOutcomesArgument() :
                 string.Join(",", outcomeSettingKeys.Take(8).Select(key => key + "=base")));
             AppendJsonString(sb, "uiAssets", FormatScopeOutcome(!buildTextPatch || preserveBaseUiAssets));
+            AppendJsonString(sb, "playerNameForms", buildTextPatch ? FormatPlayerNameForms() : "full");
             sb.AppendLine("  \"includeFont\": " + (buildFontPatch || buildTextPatch ? "true" : "false") + ",");
             sb.AppendLine("  \"debugApply\": " + (debugApply ? "true" : "false") + ",");
             sb.AppendLine("  \"files\": [");
@@ -3936,6 +3963,16 @@ namespace FFXIVKoreanPatch.Main
 
             SaveTextConfigurationSettings();
             UpdateStatusLabel("텍스트·UI 구성: " + GetTextProfileDisplayName());
+            SetActionButtonsEnabled(true);
+        }
+
+        public void SetPlayerNameForms(bool useGlobalForms)
+        {
+            if (IsWorkActive) return;
+            globalPlayerNameForms = useGlobalForms;
+            MarkPreflightRequired();
+            SaveTextConfigurationSettings();
+            UpdateStatusLabel("플레이어 호칭: " + (useGlobalForms ? "글로벌식 (이름·성 구분)" : "풀네임"));
             SetActionButtonsEnabled(true);
         }
 
