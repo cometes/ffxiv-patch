@@ -669,8 +669,7 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 IsAddonSheet(sheetName),
                 sheetPolicy,
                 _rsvResolver,
-                _options.TextScopePolicy,
-                _options.GlobalPlayerNameForms);
+                _options.TextScopePolicy);
 
             for (int i = 0; i < globalHeader.Pages.Count; i++)
             {
@@ -796,8 +795,7 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             bool targetUsesLanguageSuffix)
         {
             const string referenceLanguage = "ja";
-            if (!_options.GlobalPlayerNameForms ||
-                !targetUsesLanguageSuffix ||
+            if (!targetUsesLanguageSuffix ||
                 string.Equals(_options.TargetLanguage, referenceLanguage, StringComparison.OrdinalIgnoreCase) ||
                 !globalHeader.HasLanguage(LanguageCodes.ToId(referenceLanguage)))
             {

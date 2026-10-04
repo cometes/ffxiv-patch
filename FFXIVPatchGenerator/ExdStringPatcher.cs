@@ -532,10 +532,7 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                         {
                             selected = replacement;
                             allowRsvResolution = !sheetPolicy.ShouldUseGlobalFallbackRow(targetRow.RowId);
-                            if (patchPolicy != null &&
-                                patchPolicy.TransferGlobalPlayerNameForms &&
-                                !forceReplacement &&
-                                !sheetPolicy.ShouldUseGlobalFallbackRow(targetRow.RowId))
+                            if (!forceReplacement && !sheetPolicy.ShouldUseGlobalFallbackRow(targetRow.RowId))
                             {
                                 byte[] nameReference = null;
                                 if (nameFormReference != null)
@@ -1596,7 +1593,6 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
         public readonly PatchSheetPolicy SheetPolicy;
         public readonly RsvStringResolver RsvResolver;
         public readonly TextSheetScopePolicy TextSheetScopePolicy;
-        public readonly bool TransferGlobalPlayerNameForms;
 
         public StringPatchPolicy(bool protectShortNonKoreanUiTokens, PatchSheetPolicy sheetPolicy)
             : this(protectShortNonKoreanUiTokens, protectShortNonKoreanUiTokens, sheetPolicy)
@@ -1629,8 +1625,7 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             bool protectUiSeStringStructure,
             PatchSheetPolicy sheetPolicy,
             RsvStringResolver rsvResolver,
-            TextScopePolicy textScopePolicy,
-            bool transferGlobalPlayerNameForms = false)
+            TextScopePolicy textScopePolicy)
         {
             SheetName = sheetName;
             ProtectShortNonKoreanUiTokens = protectShortNonKoreanUiTokens;
@@ -1638,7 +1633,6 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             SheetPolicy = sheetPolicy ?? PatchSheetPolicy.Empty;
             RsvResolver = rsvResolver ?? RsvStringResolver.Empty;
             TextSheetScopePolicy = (textScopePolicy ?? TextScopePolicy.CreateFull()).ForSheet(sheetName);
-            TransferGlobalPlayerNameForms = transferGlobalPlayerNameForms;
         }
     }
 

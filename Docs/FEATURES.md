@@ -41,7 +41,6 @@
 - 기본값은 기존 동작을 유지하는 `전체 한글`
 - 이전 UI의 `story` 저장값은 Story만 한국어인 9개 결과의 `custom`으로 마이그레이션
 - 이전 6개 `preserveBase...` 키는 하나라도 `true`이면 `custom`, 모두 `false`이면 `full`로 읽음
-- `플레이어 호칭`을 `글로벌식`(기본값)/`풀네임`으로 선택. `글로벌식`이면 제너레이터에 `--global-player-name-forms`를 전달하고 `playerNameForms=global|full`로 저장
 - `targetLanguage`, `textProfile`, 9개 적용 결과와 별도의 `custom.*` 초안을 저장. 전체 한글로 전환해도 직접 설정을 보존
 - 설정 파일은 원자적으로 교체하며 저장 실패는 하단에 계속 표시. 읽기 불가/잘못된 설정은 초기화 오류로 안내
 - 본문 스크롤과 하단 고정 적용 영역을 분리. 현재 설치 상태와 다음 선택을 구분하고 좁은 화면에서는 텍스트 범위를 한 열로 표시
@@ -205,11 +204,13 @@
 - 파티 리스트 번호 표시 설정이 1~8로 바뀌는 경우를 고려해 본인 번호 PUA glyph(`U+E0E1`~`U+E0E8`)를 clean global의 속 빈 네모 번호 모양으로 복원. FDT 엔트리와 glyph 픽셀을 함께 이식해 `U+E0B1`~`U+E0B8` 동그라미 번호와 섞이지 않도록 처리
 - 2026-05-23 보강: 저배율/작은 채팅창/인스턴스 표기에서 PUA glyph 주변 픽셀이 섞이지 않도록 `U+E031`, `U+E037`, `U+E0B1`~`U+E0B8`, `U+E0E1`~`U+E0E8`은 필수 seed로 유지하고, 각 보호 font route에서 clean/source와 patched target 양쪽에 존재하는 PUA glyph도 자동 수집해 dirty target cell을 재사용하지 않고 8px base/mip 주변 영역까지 clean PUA cell로 검증한다.
 - `--anonymize-quest-chat-phrases`는 현재 비활성화/no-op입니다. `quest/*` sheet 커버리지가 불완전하므로 기존 구현은 feature gate 뒤에 보존하고, UI 전체 패치/테스트 자동 패치는 더 이상 퀘스트 채팅 문구 익명화를 자동 활성화하지 않습니다.
-- `--global-player-name-forms`: 한국 서버 대사의 풀네임 매크로 `<String(gstr(1))>`를 글로벌 일본어 원문의 `<Split(<String(gstr(1))>, " ", 1|2)>`(이름/성) 호칭으로 교체
+- 플레이어 호칭 복원: 한국 서버 대사의 풀네임 매크로 `<String(gstr(1))>`를 글로벌 일본어 원문의 `<Split(<String(gstr(1))>, " ", 1|2)>`(이름/성) 호칭으로 교체. 별도 옵션 없이 텍스트 패치 생성 시 항상 적용
   - 한국어 대사는 일본어 원문을 따르므로 `--target-language en`이어도 같은 page의 일본어 EXD를 기준으로 삼음. 영어 원문은 의역으로 이름을 생략하는 경우가 많아 기준으로 쓰지 않음
   - 원문의 호칭이 모두 같으면(이름만 또는 성만) 순서와 무관하게 모든 이름 참조에 적용. 섞여 있으면 한국어 이름 참조 수가 같을 때만 순서대로 대응하고, 다르면 풀네임 유지
-  - 한국어 조사 매크로 `Josa`/`JosaRo`의 주어 인자도 같은 호칭으로 바꿔 실제 출력되는 이름 기준으로 조사를 고름
+  - 한국어 조사 매크로 `Josa`/`JosaRo`의 주어는 직전에 출력되는 이름 호칭을 따름. 한국어에 이미 `Split` 호칭이 있으면 그 호칭을 유지하고 조사도 그 호칭을 따름. 조건 분기(`If`/`Switch` 등)에 따라 직전 호칭이 달라져 조사 주어를 하나로 정할 수 없으면 해당 문자열은 풀네임 유지
+  - 플레이어 이름 `Split`은 구분자(공백 1자)와 인덱스(1 또는 2)까지 검증하고, 하나라도 맞지 않거나 SeString 파싱에 실패하면 한국어 원문 유지
   - 원문에 이름/성 호칭이 없는 row, 글로벌 fallback row, literal remap은 그대로 유지. 처리/유지 수는 `Name forms applied`/`Name forms kept full`로 출력
+  - 회귀 테스트: `Scripts\test-name-forms.ps1`
 - `patch-policy.json` 기반 sheet/row/column 보존과 row/column remap
 - 텍스트 생성 또는 명시적 CSV 진단 시 `patch-diagnostics.tsv` 생성. 모든 텍스트가 Base이면 일반 실행은 자산 전용 경로 사용
 - `--diagnostic-csv` 지정 sheet의 row/column 비교 CSV 생성. Base 셀은 remap/RSV보다 먼저 원문으로 선택
@@ -306,7 +307,6 @@
 - `--allow-patched-global`: 이미 패치된 index 사용 허용, 실험용
 - `--allow-korean-font-fallback`: TTMP 없이 한국 서버 폰트 직접 복사, 실험용
 - `--policy`: JSON 패치 정책 파일
-- `--global-player-name-forms`: 글로벌 원문의 이름/성 호칭을 한국어 대사에 적용
 - `--rsv-map`: RSV token map JSON 파일. 지정하지 않으면 실행 파일 옆 `rsv.json`, 현재 작업 디렉터리 `rsv.json` 순서로 자동 탐색
 - `--diagnostic-csv`: 지정 sheet의 row/column 비교 CSV 출력
 - `--allow-version-mismatch`: 글로벌/한국 서버 버전 불일치 허용, 진단용

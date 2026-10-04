@@ -104,8 +104,6 @@ namespace FFXIVKoreanPatch.Main
         private readonly ToggleButton scopeCommonBase;
         private readonly ToggleButton scopeRemainderBase;
         private readonly ToggleButton scopeUiAssetsBase;
-        private readonly RadioButton playerNameGlobal;
-        private readonly RadioButton playerNameFull;
         private readonly Button fullPatchButton;
         private readonly Button fontPatchButton;
         private readonly Button removeButton;
@@ -212,8 +210,6 @@ namespace FFXIVKoreanPatch.Main
             scopeCommonBase = Find<ToggleButton>("ScopeCommonBase");
             scopeRemainderBase = Find<ToggleButton>("ScopeRemainderBase");
             scopeUiAssetsBase = Find<ToggleButton>("ScopeUiAssetsBase");
-            playerNameGlobal = Find<RadioButton>("PlayerNameGlobal");
-            playerNameFull = Find<RadioButton>("PlayerNameFull");
             baseScopeButtons = new ToggleButton[]
             {
                 scopeStoryBase, scopeBnpcBase, scopeActionBase, scopeDutyBase, scopeItemBase,
@@ -459,15 +455,6 @@ namespace FFXIVKoreanPatch.Main
                 koreanScopeButtons[i].Checked += scopeHandler;
             }
 
-            playerNameGlobal.Checked += (sender, args) =>
-            {
-                if (!suppressOptionEvents) controller.SetPlayerNameForms(true);
-            };
-            playerNameFull.Checked += (sender, args) =>
-            {
-                if (!suppressOptionEvents) controller.SetPlayerNameForms(false);
-            };
-
             fullPatchButton.Click += (sender, args) => controller.RequestFullPatch();
             fontPatchButton.Click += (sender, args) => controller.RequestFontPatch();
             removeButton.Click += (sender, args) => controller.RequestRemove();
@@ -526,8 +513,6 @@ namespace FFXIVKoreanPatch.Main
                 controller.PreserveBaseCommonPhrases,
                 controller.PreserveBaseRemainderText,
                 controller.PreserveBaseUiAssets);
-            playerNameGlobal.IsChecked = controller.GlobalPlayerNameForms;
-            playerNameFull.IsChecked = !controller.GlobalPlayerNameForms;
             SetTextProfileVisuals(controller.TextProfile);
             suppressOptionEvents = previousSuppression;
         }
@@ -755,8 +740,6 @@ namespace FFXIVKoreanPatch.Main
                     baseScopeButtons[i].IsEnabled = state.ControlsEnabled;
                     koreanScopeButtons[i].IsEnabled = state.ControlsEnabled;
                 }
-                playerNameGlobal.IsEnabled = state.ControlsEnabled;
-                playerNameFull.IsEnabled = state.ControlsEnabled;
                 restoreBackupButton.IsEnabled = state.ControlsEnabled;
                 openReleaseButton.IsEnabled = state.ControlsEnabled;
                 openLogsButton.IsEnabled = state.ControlsEnabled;

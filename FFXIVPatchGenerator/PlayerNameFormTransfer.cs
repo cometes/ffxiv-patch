@@ -10,7 +10,8 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
         NotApplicable,
         // Korean name references were rewritten to the global first/last name forms.
         Applied,
-        // The global row mixes forms and the Korean row has a different number of name references.
+        // The forms cannot be mapped safely (mixed forms with a different reference count, or a
+        // particle whose subject depends on a condition); the Korean row is kept as-is.
         SkippedAmbiguous,
         // A SeString could not be parsed safely; the Korean row is kept as-is.
         SkippedUnparsed
@@ -19,8 +20,8 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
     // Korean server names are a single word, so Korean text always prints the full player name
     // (<String(gstr(1))>). Global text instead uses <Split(<String(gstr(1))>, " ", 1|2)> to call the
     // player by first or last name depending on the speaker. This copies those forms from the global
-    // row onto the Korean row, including the name argument of the Korean particle (Josa) macros so
-    // the particle is chosen for the name that is actually printed.
+    // row onto the Korean row. The subject of a Korean particle macro (Josa/JosaRo) follows the name
+    // form displayed just before it, so the particle is chosen for the name that is actually printed.
     internal static class PlayerNameFormTransfer
     {
         private const byte MacroStart = 0x02;
@@ -29,6 +30,7 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
         private const byte JosaRoMacro = 0x0E;
         private const byte SplitMacro = 0x2C;
         private const byte StringExpression = 0xFF;
+        private const byte SplitSeparator = 0x20;
 
         // <String(gstr(1))>: the local player's full name.
         private static readonly byte[] FullNameToken = { 0x02, 0x29, 0x03, 0xEB, 0x02, 0x03 };
@@ -79,7 +81,9 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             byte[] rewritten;
             if (!TryRewrite(korean, 0, korean.Length, false, assigner, out rewritten))
             {
-                return PlayerNameFormTransferStatus.SkippedUnparsed;
+                return assigner.Ambiguous
+                    ? PlayerNameFormTransferStatus.SkippedAmbiguous
+                    : PlayerNameFormTransferStatus.SkippedUnparsed;
             }
 
             result = rewritten;
@@ -98,7 +102,8 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 }
 
                 MacroBounds macro;
-                if (!TryReadMacro(bytes, cursor, end, out macro))
+                bool isNameSplit;
+                if (!TryReadMacro(bytes, cursor, end, out macro) || !TryClassifySplit(bytes, macro, out isNameSplit))
                 {
                     return false;
                 }
@@ -107,7 +112,7 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 {
                     forms.Add(null);
                 }
-                else if (IsSplitNameToken(bytes, macro))
+                else if (isNameSplit)
                 {
                     forms.Add(Slice(bytes, macro.Offset, macro.NextOffset - macro.Offset));
                 }
@@ -138,22 +143,16 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 }
 
                 MacroBounds macro;
-                if (!TryReadMacro(bytes, cursor, end, out macro))
+                bool isNameSplit;
+                if (!TryReadMacro(bytes, cursor, end, out macro) || !TryClassifySplit(bytes, macro, out isNameSplit))
                 {
                     visible = 0;
                     return false;
                 }
 
-                if (IsFullNameToken(bytes, macro))
+                if (IsFullNameToken(bytes, macro) || isNameSplit)
                 {
-                    if (!insideJosaSubject)
-                    {
-                        count++;
-                    }
-                }
-                else if (IsSplitNameToken(bytes, macro))
-                {
-                    // Already a global-style form; it is kept but still occupies a reference slot.
+                    // An existing Split is kept but still occupies a reference slot.
                     if (!insideJosaSubject)
                     {
                         count++;
@@ -204,14 +203,28 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 }
 
                 MacroBounds macro;
-                if (!TryReadMacro(bytes, cursor, end, out macro))
+                bool isNameSplit;
+                if (!TryReadMacro(bytes, cursor, end, out macro) || !TryClassifySplit(bytes, macro, out isNameSplit))
                 {
                     return false;
                 }
 
                 if (IsFullNameToken(bytes, macro))
                 {
-                    byte[] form = assigner.Next(insideJosaSubject);
+                    byte[] form;
+                    if (insideJosaSubject)
+                    {
+                        if (!assigner.TryGetJosaSubjectForm(out form))
+                        {
+                            return false;
+                        }
+                    }
+                    else
+                    {
+                        form = assigner.NextVisible();
+                        assigner.Displayed = DisplayedName.Of(form);
+                    }
+
                     if (form == null)
                     {
                         output.Write(bytes, macro.Offset, macro.NextOffset - macro.Offset);
@@ -221,9 +234,15 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                         output.Write(form, 0, form.Length);
                     }
                 }
-                else if (IsSplitNameToken(bytes, macro))
+                else if (isNameSplit)
                 {
-                    assigner.Next(insideJosaSubject);
+                    // Korean text that already picks a form keeps it, and later particles follow it.
+                    if (!insideJosaSubject)
+                    {
+                        assigner.ConsumeVisible();
+                        assigner.Displayed = DisplayedName.Of(Slice(bytes, macro.Offset, macro.NextOffset - macro.Offset));
+                    }
+
                     output.Write(bytes, macro.Offset, macro.NextOffset - macro.Offset);
                 }
                 else
@@ -253,6 +272,11 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             int cursor = macro.PayloadOffset;
             int payloadEnd = macro.PayloadOffset + macro.PayloadLength;
             int argIndex = 0;
+
+            // String arguments are treated as alternatives (If/Switch branches, particle variants):
+            // only one of them is printed, so each starts from the same displayed name.
+            DisplayedName before = assigner.Displayed;
+            List<DisplayedName> outcomes = new List<DisplayedName>();
             while (cursor < payloadEnd)
             {
                 int expressionLength;
@@ -265,10 +289,17 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 int contentLength;
                 if (TryReadStringExpression(bytes, cursor, payloadEnd, out contentStart, out contentLength))
                 {
+                    bool josaSubject = isJosa && argIndex == 0;
+                    assigner.Displayed = before;
                     byte[] content;
-                    if (!TryRewrite(bytes, contentStart, contentStart + contentLength, insideJosaSubject || (isJosa && argIndex == 0), assigner, out content))
+                    if (!TryRewrite(bytes, contentStart, contentStart + contentLength, insideJosaSubject || josaSubject, assigner, out content))
                     {
                         return false;
+                    }
+
+                    if (!josaSubject)
+                    {
+                        outcomes.Add(assigner.Displayed);
                     }
 
                     if (!BytesEqual(bytes, contentStart, contentLength, content))
@@ -291,6 +322,8 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 cursor += expressionLength;
                 argIndex++;
             }
+
+            assigner.Displayed = outcomes.Count == 0 ? before : assigner.Merge(outcomes);
 
             if (!changed)
             {
@@ -349,18 +382,47 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             return BytesEqual(bytes, macro.Offset, macro.NextOffset - macro.Offset, FullNameToken);
         }
 
-        // <Split("<String(gstr(1))>", " ", n)>
-        private static bool IsSplitNameToken(byte[] bytes, MacroBounds macro)
+        // Recognizes <Split("<String(gstr(1))>", " ", 1|2)>. Returns false when a Split over the player
+        // name has malformed or unexpected remaining arguments, so the caller keeps the row unchanged.
+        private static bool TryClassifySplit(byte[] bytes, MacroBounds macro, out bool isNameSplit)
         {
+            isNameSplit = false;
             if (macro.Type != SplitMacro)
+            {
+                return true;
+            }
+
+            int end = macro.PayloadOffset + macro.PayloadLength;
+            int nameStart;
+            int nameLength;
+            if (!TryReadStringExpression(bytes, macro.PayloadOffset, end, out nameStart, out nameLength) ||
+                !BytesEqual(bytes, nameStart, nameLength, FullNameToken))
+            {
+                // Not a player-name Split; its arguments are validated like any other macro.
+                return true;
+            }
+
+            int separatorStart;
+            int separatorLength;
+            if (!TryReadStringExpression(bytes, nameStart + nameLength, end, out separatorStart, out separatorLength) ||
+                separatorLength != 1 ||
+                bytes[separatorStart] != SplitSeparator)
             {
                 return false;
             }
 
-            int contentStart;
-            int contentLength;
-            return TryReadStringExpression(bytes, macro.PayloadOffset, macro.PayloadOffset + macro.PayloadLength, out contentStart, out contentLength) &&
-                BytesEqual(bytes, contentStart, contentLength, FullNameToken);
+            uint index;
+            int indexLength;
+            int indexOffset = separatorStart + separatorLength;
+            if (!TryReadUInt(bytes, indexOffset, end, out index, out indexLength) ||
+                (index != 1 && index != 2) ||
+                indexOffset + indexLength != end)
+            {
+                return false;
+            }
+
+            isNameSplit = true;
+            return true;
         }
 
         private static bool AllFormsEqual(List<byte[]> forms)
@@ -624,15 +686,51 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             public int NextOffset;
         }
 
-        // Hands out the global form for each Korean name reference in document order. A Josa subject
-        // reuses the form of the name printed just before it, which is the name the particle follows.
+        private enum DisplayedNameKind
+        {
+            // No player name has been printed yet.
+            None,
+            // The last printed player name is known; Form is its token (null for the full name).
+            Known,
+            // The last printed player name depends on a condition.
+            Uncertain
+        }
+
+        private sealed class DisplayedName
+        {
+            public static readonly DisplayedName None = new DisplayedName(DisplayedNameKind.None, null);
+            public static readonly DisplayedName Uncertain = new DisplayedName(DisplayedNameKind.Uncertain, null);
+
+            public readonly DisplayedNameKind Kind;
+            public readonly byte[] Form;
+
+            private DisplayedName(DisplayedNameKind kind, byte[] form)
+            {
+                Kind = kind;
+                Form = form;
+            }
+
+            public static DisplayedName Of(byte[] form)
+            {
+                return new DisplayedName(DisplayedNameKind.Known, form);
+            }
+
+            public bool SameAs(DisplayedName other)
+            {
+                return Kind == other.Kind && (Kind != DisplayedNameKind.Known || FormsEqual(Form, other.Form));
+            }
+        }
+
+        // Hands out the global form for each Korean name reference in document order, and tracks the
+        // name form printed most recently so a particle subject can follow it.
         private sealed class FormAssigner
         {
             private readonly List<byte[]> _forms;
             private readonly bool _uniform;
             private int _nextVisible;
-            private byte[] _lastVisible;
-            private bool _hasVisible;
+
+            public DisplayedName Displayed = DisplayedName.None;
+            public bool Ambiguous;
 
             public FormAssigner(List<byte[]> forms, bool uniform)
             {
@@ -640,23 +738,50 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 _uniform = uniform;
             }
 
-            public byte[] Next(bool josaSubject)
+            public byte[] NextVisible()
             {
-                if (_uniform)
-                {
-                    return _forms[0];
-                }
-
-                if (josaSubject)
-                {
-                    return _hasVisible ? _lastVisible : _forms[0];
-                }
-
-                byte[] form = _nextVisible < _forms.Count ? _forms[_nextVisible] : null;
+                byte[] form = _uniform ? _forms[0] : (_nextVisible < _forms.Count ? _forms[_nextVisible] : null);
                 _nextVisible++;
-                _lastVisible = form;
-                _hasVisible = true;
                 return form;
+            }
+
+            public void ConsumeVisible()
+            {
+                _nextVisible++;
+            }
+
+            public bool TryGetJosaSubjectForm(out byte[] form)
+            {
+                DisplayedName subject = Resolve(Displayed);
+                if (subject.Kind == DisplayedNameKind.Known)
+                {
+                    form = subject.Form;
+                    return true;
+                }
+
+                form = null;
+                Ambiguous = true;
+                return false;
+            }
+
+            public DisplayedName Merge(List<DisplayedName> outcomes)
+            {
+                DisplayedName first = Resolve(outcomes[0]);
+                for (int i = 1; i < outcomes.Count; i++)
+                {
+                    if (!first.SameAs(Resolve(outcomes[i])))
+                    {
+                        return DisplayedName.Uncertain;
+                    }
+                }
+
+                return first;
+            }
+
+            // With a single global form, a particle before any printed name still takes that form.
+            private DisplayedName Resolve(DisplayedName name)
+            {
+                return name.Kind == DisplayedNameKind.None && _uniform ? DisplayedName.Of(_forms[0]) : name;
             }
         }
     }

@@ -122,9 +122,6 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             Console.WriteLine("  --rsv-map          Optional RSV token map JSON. Also auto-detected beside the generator exe.");
             Console.WriteLine("  --anonymize-quest-chat-phrases");
             Console.WriteLine("                     Disabled/no-op until quest say sheet coverage is complete.");
-            Console.WriteLine("  --global-player-name-forms");
-            Console.WriteLine("                     Call the player by first or last name where the global text does,");
-            Console.WriteLine("                     instead of always using the full name from Korean text.");
             Console.WriteLine("  --preserve-base-bnpc-names");
             Console.WriteLine("                     Keep BNpcName name columns in the base client language.");
             Console.WriteLine("  --preserve-base-action-names");
@@ -269,9 +266,6 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
         public bool AllowKoreanFontFallback;
         public bool AllowVersionMismatch;
         public bool SkipUiTextureFix;
-
-        // Copy the global first/last name forms onto Korean text that always uses the full name.
-        public bool GlobalPlayerNameForms;
         public bool IncludeCommandSheets = true;
         public readonly HashSet<string> PreserveBaseLanguageGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         public bool AnonymizeQuestChatPhrasesRequested;
@@ -329,12 +323,6 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 if (string.Equals(arg, "--allow-version-mismatch", StringComparison.OrdinalIgnoreCase))
                 {
                     options.AllowVersionMismatch = true;
-                    continue;
-                }
-
-                if (string.Equals(arg, "--global-player-name-forms", StringComparison.OrdinalIgnoreCase))
-                {
-                    options.GlobalPlayerNameForms = true;
                     continue;
                 }
 
