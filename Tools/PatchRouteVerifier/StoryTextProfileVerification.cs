@@ -361,12 +361,11 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
                             if (sourceBytes != null && sourceBytes.Length > 0)
                             {
                                 byte[] nameFormReference = nameFormReferenceFile.GetStringBytes(cleanRow.RowId, cleanHeader, columnIndex) ?? cleanBytes;
-                                expectedBytes = ResolveExpectedStoryBytes(sourceBytes, nameFormReference);
-                                byte[] sayQuestText;
-                                if (column.Offset == 4 && sayQuestTexts.TryGetValue(cleanRow.RowId, out sayQuestText))
-                                {
-                                    expectedBytes = sayQuestText;
-                                }
+                                expectedBytes = ResolveExpectedSayQuestText(
+                                    sayQuestTexts,
+                                    cleanRow.RowId,
+                                    column.Offset,
+                                    ResolveExpectedStoryBytes(sourceBytes, nameFormReference));
                                 result.KoreanCellsChecked++;
                                 koreanSourceDiffers = !BytesEqual(cleanBytes, expectedBytes);
                                 if (koreanSourceDiffers)
@@ -383,6 +382,8 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
                             }
                             else
                             {
+                                // The generator's say quest pass also annotates cells that fell back to base text.
+                                expectedBytes = ResolveExpectedSayQuestText(sayQuestTexts, cleanRow.RowId, column.Offset, cleanBytes);
                                 result.SourceFallbackCellsChecked++;
                             }
                         }
@@ -465,38 +466,37 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
 
                 int textColumnIndex = cleanHeader.FindStringColumnIndexByOffset(4);
                 bool targetHasStringKeys = IsStringKeyHeader(cleanHeader);
-                List<SayQuestRowText> rows = new List<SayQuestRowText>();
-                for (int rowIndex = 0; rowIndex < cleanFile.Rows.Count; rowIndex++)
-                {
-                    ExcelDataRow cleanRow = cleanFile.Rows[rowIndex];
-                    string key;
-                    if (!TryGetPlainString(cleanFile, cleanHeader, cleanRow, 0, out key))
+                List<SayQuestRowText> rows = SayQuestPhraseLocalizer.BuildRows(
+                    cleanHeader,
+                    cleanFile,
+                    nameFormReferenceFile,
+                    delegate(ExcelDataRow cleanRow)
                     {
-                        continue;
-                    }
+                        byte[] cleanBytes = cleanFile.GetStringBytes(cleanRow, cleanHeader, textColumnIndex) ?? new byte[0];
+                        StorySourceRow sourceRow = ResolveStorySourceRow(cleanFile, cleanHeader, cleanRow, targetHasStringKeys, sourceRows);
+                        byte[] sourceBytes = sourceRow == null
+                            ? null
+                            : sourceRow.File.GetStringBytesByColumnOffset(sourceRow.Row, sourceRow.Header, 4);
+                        if (sheetScope.Classify(cleanRow.RowId, 4) != TextScope.Story || sourceBytes == null || sourceBytes.Length == 0)
+                        {
+                            return cleanBytes;
+                        }
 
-                    byte[] cleanBytes = cleanFile.GetStringBytes(cleanRow, cleanHeader, textColumnIndex) ?? new byte[0];
-                    byte[] korean = cleanBytes;
-                    StorySourceRow sourceRow = ResolveStorySourceRow(cleanFile, cleanHeader, cleanRow, targetHasStringKeys, sourceRows);
-                    byte[] sourceBytes = sourceRow == null
-                        ? null
-                        : sourceRow.File.GetStringBytesByColumnOffset(sourceRow.Row, sourceRow.Header, 4);
-                    if (sheetScope.Classify(cleanRow.RowId, 4) == TextScope.Story && sourceBytes != null && sourceBytes.Length > 0)
-                    {
                         byte[] nameFormReference = nameFormReferenceFile.GetStringBytes(cleanRow.RowId, cleanHeader, textColumnIndex) ?? cleanBytes;
-                        korean = ResolveExpectedStoryBytes(sourceBytes, nameFormReference);
-                    }
-
-                    SayQuestRowText row = new SayQuestRowText();
-                    row.RowId = cleanRow.RowId;
-                    row.Key = key;
-                    row.Japanese = nameFormReferenceFile.GetStringBytes(cleanRow.RowId, cleanHeader, textColumnIndex);
-                    row.Base = cleanBytes;
-                    row.Korean = korean;
-                    rows.Add(row);
-                }
+                        return ResolveExpectedStoryBytes(sourceBytes, nameFormReference);
+                    });
 
                 return SayQuestPhraseLocalizer.Localize(rows).Replacements;
+            }
+
+            private static byte[] ResolveExpectedSayQuestText(
+                Dictionary<uint, byte[]> sayQuestTexts,
+                uint rowId,
+                ushort columnOffset,
+                byte[] expected)
+            {
+                byte[] sayQuestText;
+                return columnOffset == 4 && sayQuestTexts.TryGetValue(rowId, out sayQuestText) ? sayQuestText : expected;
             }
 
             // The generator copies player name forms from the Japanese page; an English target uses the
@@ -516,9 +516,20 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
                 }
 
                 string referencePath = BuildExdPath(sheet, page.StartId, referenceLanguage, true);
-                return _cleanText.ContainsPath(referencePath)
-                    ? ExcelDataFile.Parse(_cleanText.ReadFile(referencePath))
-                    : null;
+                if (!_cleanText.ContainsPath(referencePath))
+                {
+                    return null;
+                }
+
+                // Like the generator, an unreadable optional reference falls back to the target page.
+                try
+                {
+                    return ExcelDataFile.Parse(_cleanText.ReadFile(referencePath));
+                }
+                catch (InvalidDataException)
+                {
+                    return null;
+                }
             }
 
             private void CheckStoryStructure(

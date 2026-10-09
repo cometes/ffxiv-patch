@@ -42,8 +42,6 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
         private const int MaxPhraseLength = 80;
         private const string SayModeMarker = "「Say」モード";
         private const int MinWordAnnotationLength = 2;
-        private static readonly byte[] SayKeyMarker = Encoding.ASCII.GetBytes("_SAY");
-        private static readonly byte[] SayModeMarkerBytes = Encoding.ASCII.GetBytes("Say");
         private static readonly UTF8Encoding StrictUtf8 = new UTF8Encoding(false, true);
         private static readonly char[] TrailingPunctuation = { '！', '!', '。', '.', '？', '?', '…' };
         private static readonly QuotePair[] KoreanQuotePairs =
@@ -167,6 +165,8 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
 
             // A prompted quest may still quote a phrase only in dialogue. A puzzle quest may name its answer
             // without quotes (a riddle letter); there the word itself is annotated wherever it appears.
+            // Phrases with a base phrase not shown yet keep all their base phrases, so a quote is still
+            // matched to the base phrase its own row names.
             Dictionary<string, List<string>> unannotated = Unannotated(basesByKorean, annotated);
             if (unannotated.Count > 0)
             {
@@ -181,12 +181,15 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             }
 
             // The player must be able to see what to type. A quest whose prompts quote the phrases needs
-            // every phrase shown; a puzzle quest at least one hint (its other phrases are derived answers).
-            foreach (string koreanKey in basesByKorean.Keys)
+            // every base phrase shown; a puzzle quest at least one hint (its other phrases are derived answers).
+            foreach (KeyValuePair<string, List<string>> entry in basesByKorean)
             {
-                if (promptedQuest && !annotated.Contains(koreanKey))
+                for (int i = 0; promptedQuest && i < entry.Value.Count; i++)
                 {
-                    return KeepKorean(result);
+                    if (!annotated.Contains(AnnotationKey(entry.Key, entry.Value[i])))
+                    {
+                        return KeepKorean(result);
+                    }
                 }
             }
 
@@ -208,32 +211,16 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             out SayQuestPhraseResult result)
         {
             result = new SayQuestPhraseResult();
-            if (!IsKeyTextLayout(header) || !MayContainSayQuest(patchedPage, japaneseReference))
+            if (!IsKeyTextLayout(header))
             {
                 return patchedPage;
             }
 
             ExcelDataFile patched = ExcelDataFile.Parse(patchedPage);
-            List<SayQuestRowText> rows = new List<SayQuestRowText>();
-            for (int i = 0; i < patched.Rows.Count; i++)
+            result = Localize(BuildRows(header, cleanTarget, japaneseReference, delegate(ExcelDataRow row)
             {
-                ExcelDataRow row = patched.Rows[i];
-                string key;
-                if (!TryDecodePlain(patched.GetStringBytesByColumnOffset(row, header, 0), out key))
-                {
-                    continue;
-                }
-
-                SayQuestRowText text = new SayQuestRowText();
-                text.RowId = row.RowId;
-                text.Key = key;
-                text.Korean = patched.GetStringBytesByColumnOffset(row, header, TextColumnOffset);
-                text.Base = GetText(cleanTarget, header, row.RowId);
-                text.Japanese = GetText(japaneseReference, header, row.RowId);
-                rows.Add(text);
-            }
-
-            result = Localize(rows);
+                return GetText(patched, header, row.RowId);
+            }));
             if (result.Replacements.Count == 0)
             {
                 return patchedPage;
@@ -246,31 +233,38 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 result.Replacements);
         }
 
-        // Cheap byte check before parsing: phrase rows have SAY/SAYTODO keys, or the Japanese page has a
-        // 「Say」モード prompt. Most quest pages have neither.
-        private static bool MayContainSayQuest(byte[] patchedPage, ExcelDataFile japaneseReference)
-        {
-            return IndexOf(patchedPage, SayKeyMarker) >= 0 ||
-                   (japaneseReference != null && IndexOf(japaneseReference.Data, SayModeMarkerBytes) >= 0);
-        }
+        public delegate byte[] KoreanTextSelector(ExcelDataRow cleanRow);
 
-        private static int IndexOf(byte[] bytes, byte[] pattern)
+        // Rows of a quest page as Localize sees them. Keys and base text come from the clean target page,
+        // the Japanese text from the reference page (the target page when null), the Korean text from the
+        // selector. The generator passes its patched page; the verifier its expected Korean text.
+        public static List<SayQuestRowText> BuildRows(
+            ExcelHeader header,
+            ExcelDataFile cleanTarget,
+            ExcelDataFile japaneseReference,
+            KoreanTextSelector koreanText)
         {
-            for (int i = 0; i + pattern.Length <= bytes.Length; i++)
+            ExcelDataFile reference = japaneseReference ?? cleanTarget;
+            List<SayQuestRowText> rows = new List<SayQuestRowText>();
+            for (int i = 0; i < cleanTarget.Rows.Count; i++)
             {
-                int j = 0;
-                while (j < pattern.Length && bytes[i + j] == pattern[j])
+                ExcelDataRow row = cleanTarget.Rows[i];
+                string key;
+                if (!TryDecodePlain(cleanTarget.GetStringBytesByColumnOffset(row, header, 0), out key))
                 {
-                    j++;
+                    continue;
                 }
 
-                if (j == pattern.Length)
-                {
-                    return i;
-                }
+                SayQuestRowText text = new SayQuestRowText();
+                text.RowId = row.RowId;
+                text.Key = key;
+                text.Korean = koreanText(row);
+                text.Base = cleanTarget.GetStringBytesByColumnOffset(row, header, TextColumnOffset);
+                text.Japanese = GetText(reference, header, row.RowId);
+                rows.Add(text);
             }
 
-            return -1;
+            return rows;
         }
 
         public static bool IsKeyTextLayout(ExcelHeader header)
@@ -288,13 +282,24 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             Dictionary<string, List<string>> unannotated = new Dictionary<string, List<string>>(StringComparer.Ordinal);
             foreach (KeyValuePair<string, List<string>> entry in basesByKorean)
             {
-                if (!annotated.Contains(entry.Key))
+                for (int i = 0; i < entry.Value.Count; i++)
                 {
-                    unannotated.Add(entry.Key, entry.Value);
+                    if (!annotated.Contains(AnnotationKey(entry.Key, entry.Value[i])))
+                    {
+                        unannotated.Add(entry.Key, entry.Value);
+                        break;
+                    }
                 }
             }
 
             return unannotated;
+        }
+
+        // Annotations are tracked per Korean phrase and base phrase: one Korean phrase may stand for
+        // several base phrases, and each must be shown somewhere.
+        private static string AnnotationKey(string koreanKey, string baseText)
+        {
+            return koreanKey + "\u0001" + baseText;
         }
 
         private static SayQuestPhraseResult KeepKorean(SayQuestPhraseResult result)
@@ -433,7 +438,7 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                         insertions.Add(end, annotation);
                     }
 
-                    annotated.Add(entry.Key);
+                    annotated.Add(AnnotationKey(entry.Key, chosen));
                 }
             }
 
@@ -480,7 +485,7 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                                 insertions.Add(close, annotation);
                             }
 
-                            annotated.Add(koreanKey);
+                            annotated.Add(AnnotationKey(koreanKey, chosen));
                         }
                     }
 

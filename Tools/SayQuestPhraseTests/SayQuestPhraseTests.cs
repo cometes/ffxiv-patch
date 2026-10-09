@@ -61,14 +61,34 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
                 Change(2, "대화창에서 대화 방식을 '말하기'로 하고 \"안녕하세요.(Greetings and salutations!)\"라고 입력"),
                 Change(3, "I come in peace."),
                 Change(4, "Greetings and salutations!"));
-            Expect("an undecidable base phrase leaves that quote as it is",
+            Expect("an undecidable quote is left as it is when every base phrase is shown elsewhere",
+                Rows(
+                    Row(1, "TODO_01", JaHello, "enter “I come in peace.”", KoHello),
+                    Row(2, "TODO_04", JaHello, "enter “Greetings and salutations!”", KoHello),
+                    Row(3, "SEQ_01", JaHello, "say hello", KoHello),
+                    Row(4, "SYSTEM_000_012", "こんにちは", "I come in peace.", "안녕하세요."),
+                    Row(5, "SYSTEM_000_032", "こんにちは", "Greetings and salutations!", "안녕하세요.")),
+                Applied(2, 2),
+                Change(1, "대화창에서 대화 방식을 '말하기'로 하고 \"안녕하세요.(I come in peace.)\"라고 입력"),
+                Change(2, "대화창에서 대화 방식을 '말하기'로 하고 \"안녕하세요.(Greetings and salutations!)\"라고 입력"),
+                Change(4, "I come in peace."),
+                Change(5, "Greetings and salutations!"));
+            Expect("a base phrase that no prompt can show keeps the quest Korean",
                 Rows(
                     Row(1, "TODO_01", JaHello, "enter “I come in peace.”", KoHello),
                     Row(2, "SEQ_01", JaHello, "say hello", KoHello),
                     Row(3, "SYSTEM_000_012", "こんにちは", "I come in peace.", "안녕하세요."),
                     Row(4, "SYSTEM_000_032", "こんにちは", "Greetings and salutations!", "안녕하세요.")),
-                Applied(2, 1),
+                KeptKorean());
+            Expect("a base phrase shown only in dialogue is annotated there",
+                Rows(
+                    Row(1, "TODO_01", JaHello, "enter “I come in peace.”", KoHello),
+                    Row(2, "NIA_000_040", "", "Say “Greetings and salutations!” to her.", "그녀에게 \"안녕하세요.\"라고 말해."),
+                    Row(3, "SYSTEM_000_012", "こんにちは", "I come in peace.", "안녕하세요."),
+                    Row(4, "SYSTEM_000_032", "こんにちは", "Greetings and salutations!", "안녕하세요.")),
+                Applied(2, 2),
                 Change(1, "대화창에서 대화 방식을 '말하기'로 하고 \"안녕하세요.(I come in peace.)\"라고 입력"),
+                Change(2, "그녀에게 \"안녕하세요.(Greetings and salutations!)\"라고 말해."),
                 Change(3, "I come in peace."),
                 Change(4, "Greetings and salutations!"));
             Expect("a phrase equal in both languages needs no annotation",
@@ -177,13 +197,16 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             string[] keys = { Q + "TODO_00", Q + "SYSTEM_000_100", Q + "NPCA_000_010", Q + "SEQ_00" };
             string[] japanese = { JaPrompt, "がんばれ", "がんばれ！", "セリフ" };
             string[] korean = { KoPrompt, "힘내", "힘내! 힘내!", "대사" };
+            // The patched page carries a different key on the phrase row; rows are identified by the clean
+            // target's keys, and a missing Japanese reference falls back to the target page.
+            string[] patchedKeys = { keys[0], "TEXT_PATCHED_KEY", keys[2], keys[3] };
             ExcelHeader header = ExcelHeader.Parse(BuildHeader(keys.Length));
             ExcelDataFile clean = ExcelDataFile.Parse(BuildPage(keys, japanese));
-            byte[] patched = BuildPage(keys, korean);
+            byte[] patched = BuildPage(patchedKeys, korean);
 
             List<string> problems = new List<string>();
             SayQuestPhraseResult result;
-            byte[] output = SayQuestPhraseLocalizer.ApplyToPage(header, clean, clean, patched, out result);
+            byte[] output = SayQuestPhraseLocalizer.ApplyToPage(header, clean, null, patched, out result);
             ExcelDataFile page = ExcelDataFile.Parse(output);
             ExcelDataFile input = ExcelDataFile.Parse(patched);
             string[] expected = { KoPromptAnnotated, "がんばれ", korean[2], korean[3] };
@@ -195,7 +218,7 @@ namespace FfxivKoreanPatch.FFXIVPatchGenerator
             for (int i = 0; i < keys.Length && i < page.Rows.Count; i++)
             {
                 ExcelDataRow row = page.Rows[i];
-                if (!Same(page.GetStringBytesByColumnOffset(row, header, 0), Text(keys[i])))
+                if (!Same(page.GetStringBytesByColumnOffset(row, header, 0), Text(patchedKeys[i])))
                 {
                     problems.Add("row " + i + " key changed");
                 }
