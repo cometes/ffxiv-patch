@@ -320,6 +320,13 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
                 StorySourceRows sourceRows)
             {
                 bool targetHasStringKeys = IsStringKeyHeader(cleanHeader);
+                Dictionary<uint, byte[]> sayQuestTexts = ResolveExpectedSayQuestTexts(
+                    sheet,
+                    cleanHeader,
+                    sheetScope,
+                    cleanFile,
+                    nameFormReferenceFile,
+                    sourceRows);
                 for (int rowIndex = 0; rowIndex < cleanFile.Rows.Count; rowIndex++)
                 {
                     ExcelDataRow cleanRow = cleanFile.Rows[rowIndex];
@@ -355,6 +362,11 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
                             {
                                 byte[] nameFormReference = nameFormReferenceFile.GetStringBytes(cleanRow.RowId, cleanHeader, columnIndex) ?? cleanBytes;
                                 expectedBytes = ResolveExpectedStoryBytes(sourceBytes, nameFormReference);
+                                byte[] sayQuestText;
+                                if (column.Offset == 4 && sayQuestTexts.TryGetValue(cleanRow.RowId, out sayQuestText))
+                                {
+                                    expectedBytes = sayQuestText;
+                                }
                                 result.KoreanCellsChecked++;
                                 koreanSourceDiffers = !BytesEqual(cleanBytes, expectedBytes);
                                 if (koreanSourceDiffers)
@@ -431,6 +443,60 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
                 }
 
                 return _rsvResolver.Resolve(sourceBytes).Bytes;
+            }
+
+            // Mirrors the generator's say quest phrase pass on the expected Korean text of a quest page.
+            // Rows absent from the result keep their expected Korean text.
+            private Dictionary<uint, byte[]> ResolveExpectedSayQuestTexts(
+                string sheet,
+                ExcelHeader cleanHeader,
+                TextSheetScopePolicy sheetScope,
+                ExcelDataFile cleanFile,
+                ExcelDataFile nameFormReferenceFile,
+                StorySourceRows sourceRows)
+            {
+                Dictionary<uint, byte[]> none = new Dictionary<uint, byte[]>();
+                if (_sayQuestPhrases != SayQuestPhraseMode.Base ||
+                    !SayQuestPhraseLocalizer.IsCandidateSheet(sheet) ||
+                    !SayQuestPhraseLocalizer.IsKeyTextLayout(cleanHeader))
+                {
+                    return none;
+                }
+
+                int textColumnIndex = cleanHeader.FindStringColumnIndexByOffset(4);
+                bool targetHasStringKeys = IsStringKeyHeader(cleanHeader);
+                List<SayQuestRowText> rows = new List<SayQuestRowText>();
+                for (int rowIndex = 0; rowIndex < cleanFile.Rows.Count; rowIndex++)
+                {
+                    ExcelDataRow cleanRow = cleanFile.Rows[rowIndex];
+                    string key;
+                    if (!TryGetPlainString(cleanFile, cleanHeader, cleanRow, 0, out key))
+                    {
+                        continue;
+                    }
+
+                    byte[] cleanBytes = cleanFile.GetStringBytes(cleanRow, cleanHeader, textColumnIndex) ?? new byte[0];
+                    byte[] korean = cleanBytes;
+                    StorySourceRow sourceRow = ResolveStorySourceRow(cleanFile, cleanHeader, cleanRow, targetHasStringKeys, sourceRows);
+                    byte[] sourceBytes = sourceRow == null
+                        ? null
+                        : sourceRow.File.GetStringBytesByColumnOffset(sourceRow.Row, sourceRow.Header, 4);
+                    if (sheetScope.Classify(cleanRow.RowId, 4) == TextScope.Story && sourceBytes != null && sourceBytes.Length > 0)
+                    {
+                        byte[] nameFormReference = nameFormReferenceFile.GetStringBytes(cleanRow.RowId, cleanHeader, textColumnIndex) ?? cleanBytes;
+                        korean = ResolveExpectedStoryBytes(sourceBytes, nameFormReference);
+                    }
+
+                    SayQuestRowText row = new SayQuestRowText();
+                    row.RowId = cleanRow.RowId;
+                    row.Key = key;
+                    row.Japanese = nameFormReferenceFile.GetStringBytes(cleanRow.RowId, cleanHeader, textColumnIndex);
+                    row.Base = cleanBytes;
+                    row.Korean = korean;
+                    rows.Add(row);
+                }
+
+                return SayQuestPhraseLocalizer.Localize(rows).Replacements;
             }
 
             // The generator copies player name forms from the Japanese page; an English target uses the
