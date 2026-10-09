@@ -220,6 +220,7 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
                         sheetScope,
                         cleanFile,
                         patchedFile,
+                        LoadNameFormReferencePage(sheet, page, cleanHeader, cleanUsesLanguageSuffix) ?? cleanFile,
                         sourceRows);
                 }
             }
@@ -315,6 +316,7 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
                 TextSheetScopePolicy sheetScope,
                 ExcelDataFile cleanFile,
                 ExcelDataFile patchedFile,
+                ExcelDataFile nameFormReferenceFile,
                 StorySourceRows sourceRows)
             {
                 bool targetHasStringKeys = IsStringKeyHeader(cleanHeader);
@@ -351,7 +353,8 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
                                 : sourceRow.File.GetStringBytesByColumnOffset(sourceRow.Row, sourceRow.Header, column.Offset);
                             if (sourceBytes != null && sourceBytes.Length > 0)
                             {
-                                expectedBytes = ResolveExpectedStoryBytes(sourceBytes);
+                                byte[] nameFormReference = nameFormReferenceFile.GetStringBytes(cleanRow.RowId, cleanHeader, columnIndex) ?? cleanBytes;
+                                expectedBytes = ResolveExpectedStoryBytes(sourceBytes, nameFormReference);
                                 result.KoreanCellsChecked++;
                                 koreanSourceDiffers = !BytesEqual(cleanBytes, expectedBytes);
                                 if (koreanSourceDiffers)
@@ -412,14 +415,44 @@ namespace FfxivKoreanPatch.PatchRouteVerifier
                 }
             }
 
-            private byte[] ResolveExpectedStoryBytes(byte[] sourceBytes)
+            // Mirrors the generator: the player name forms of the global Japanese text are applied to the
+            // Korean source before RSV resolution.
+            private byte[] ResolveExpectedStoryBytes(byte[] sourceBytes, byte[] nameFormReference)
             {
+                byte[] named;
+                if (PlayerNameFormTransfer.Apply(nameFormReference, sourceBytes, out named) == PlayerNameFormTransferStatus.Applied)
+                {
+                    sourceBytes = named;
+                }
+
                 if (_rsvResolver == null || !_rsvResolver.IsEnabled)
                 {
                     return sourceBytes;
                 }
 
                 return _rsvResolver.Resolve(sourceBytes).Bytes;
+            }
+
+            // The generator copies player name forms from the Japanese page; an English target uses the
+            // clean Japanese page as reference, a Japanese target its own clean page (null).
+            private ExcelDataFile LoadNameFormReferencePage(
+                string sheet,
+                ExcelPageDefinition page,
+                ExcelHeader cleanHeader,
+                bool cleanUsesLanguageSuffix)
+            {
+                const string referenceLanguage = "ja";
+                if (!cleanUsesLanguageSuffix ||
+                    string.Equals(_language, referenceLanguage, StringComparison.OrdinalIgnoreCase) ||
+                    !cleanHeader.HasLanguage(LanguageToId(referenceLanguage)))
+                {
+                    return null;
+                }
+
+                string referencePath = BuildExdPath(sheet, page.StartId, referenceLanguage, true);
+                return _cleanText.ContainsPath(referencePath)
+                    ? ExcelDataFile.Parse(_cleanText.ReadFile(referencePath))
+                    : null;
             }
 
             private void CheckStoryStructure(

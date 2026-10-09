@@ -181,6 +181,9 @@
     <Compile Include="..\..\FFXIVPatchGenerator\RsvStringResolver.cs">
       <Link>Generator\RsvStringResolver.cs</Link>
     </Compile>
+    <Compile Include="..\..\FFXIVPatchGenerator\PlayerNameFormTransfer.cs">
+      <Link>Generator\PlayerNameFormTransfer.cs</Link>
+    </Compile>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
